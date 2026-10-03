@@ -2,6 +2,7 @@
 "use strict";
 
 const BG_PRESETS = {
+  brand:    {name: "Kišenė",    light: ["#F7F7F5", "#FFFFFF", "#FFFFFF", "#D9D9D6"], dark: ["#10211D", "#162C27", "#1C3530", "#29433C"]},
   sage:     {name: "Šalavijas", light: ["#F1F3EE", "#FBFCF9", "#FFFFFF", "#DCE0D8"], dark: ["#111513", "#191E1B", "#202622", "#2E3531"]},
   white:    {name: "Balta",     light: ["#FFFFFF", "#F6F7F8", "#FFFFFF", "#E3E5E8"], dark: ["#0B0C0E", "#16181B", "#1D2024", "#2A2D31"]},
   sand:     {name: "Smėlis",    light: ["#F5F0E6", "#FCF9F3", "#FFFFFF", "#E4DCCB"], dark: ["#17140F", "#211D17", "#29241D", "#3A342A"]},
@@ -11,7 +12,7 @@ const BG_PRESETS = {
   graphite: {name: "Grafitas",  light: ["#E9EAEC", "#F6F6F7", "#FFFFFF", "#D3D5D9"], dark: ["#000000", "#0E0E10", "#17171A", "#26262B"]}
 };
 const ACCENTS = {
-  forest: {name: "Miškas", light: "#1F5C4B", dark: "#74C7A6"}, ocean: {name: "Jūra", light: "#1F5A8C", dark: "#7DB6E8"},
+  forest: {name: "Kišenė", light: "#0E3D36", dark: "#9FE0C3", soft: ["#EAF6EF", "#1E3F37"]}, mint: {name: "Mėta", light: "#3E9A85", dark: "#9FE0C3"}, ocean: {name: "Jūra", light: "#1F5A8C", dark: "#7DB6E8"},
   plum: {name: "Slyva", light: "#5B3A7A", dark: "#BFA0E0"}, amber: {name: "Gintaras", light: "#8A5A00", dark: "#F2B84B"},
   coral: {name: "Koralas", light: "#A8432C", dark: "#F4A08A"}, graphite: {name: "Grafitas", light: "#2B2F36", dark: "#C9CDD4"}
 };
@@ -34,12 +35,12 @@ function applyTheme(tp) {
   const mode = tp.mode || "system";
   if (mode === "system") delete root.dataset.theme; else root.dataset.theme = mode;
   const dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-  const bg = BG_PRESETS[tp.bg] || BG_PRESETS.sage, ac = ACCENTS[tp.accent] || ACCENTS.forest;
+  const bg = BG_PRESETS[tp.bg] || BG_PRESETS.brand, ac = ACCENTS[tp.accent] || ACCENTS.forest;
   const [b, s, r, l] = dark ? bg.dark : bg.light;
   const acc = dark ? ac.dark : ac.light;
   const set = (k, v) => root.style.setProperty(k, v);
   set("--bg", b); set("--surface", s); set("--raise", r); set("--line", l);
-  set("--accent", acc); set("--accent-soft", mix(acc, s, dark ? 0.22 : 0.13)); set("--accent-ink", dark ? b : "#FFFFFF");
+  set("--accent", acc); set("--accent-soft", ac.soft ? ac.soft[dark ? 1 : 0] : mix(acc, s, dark ? 0.22 : 0.13)); set("--accent-ink", dark ? b : "#FFFFFF");
   const fs = FONT_SIZES.find(f => f[0] === tp.font) || FONT_SIZES[1];
   document.body && (document.body.style.fontSize = fs[2] + "px");
   root.style.fontSize = fs[2] + "px";
@@ -56,7 +57,7 @@ applyTheme();
 
 function vLook() {
   const tp = themePrefs();
-  const mode = tp.mode || "system", bgK = tp.bg || "sage", acK = tp.accent || "forest";
+  const mode = tp.mode || "system", bgK = tp.bg || "brand", acK = tp.accent || "forest";
   const dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
   const ml = S.cfg.prefs?.moreLayout || "list";
   return `${subHead("Išvaizda")}
