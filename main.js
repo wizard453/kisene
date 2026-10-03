@@ -71,6 +71,59 @@ function maybeOnboard() {
   S.obShown = true; startOnboarding(); render();
 }
 
+/* ---------- Naršymo istorija: „atgal“ grąžina į ankstesnį langą ---------- */
+// Kiekvienas langas aprašomas skiltimi, polapiu ir jų būsena. Istorija sujungta su telefono „atgal“ mygtuku.
+const NAV_TRANSIENT = ["onboard", "recreview"];
+let navCur = null, navStack = [], navRestoring = false, navIgnorePop = 0;
+function navSnap() {
+  return {tab: S.tab, sub: S.sub || null, inv: S.invView?.tab || null, lesson: S.help?.lesson || null, cat: S.filter.cat || null, year: S.filter.year || null,
+    imp: S.filter.imp || null, sym: S.sub === "chart" ? S.mkt?.sym || null : null, scroll: 0};
+}
+const navKey = n => n ? JSON.stringify({...n, scroll: 0, inv: n.tab === "invest" ? n.inv : null, sym: n.sym?.symbol || null}) : "";
+function navTrack() {
+  const snap = navSnap();
+  if (!navCur) { navCur = snap; return; }
+  if (navKey(snap) === navKey(navCur)) return;
+  if (navRestoring || (typeof tourActive === "function" && tourActive())) { navCur = snap; return; }
+  const top = navStack[navStack.length - 1];
+  if (top && navKey(top) === navKey(snap)) {
+    // paspaustas „‹ atgal“ mygtukas: tai tas pats, kas grįžti istorijoje
+    navStack.pop(); navIgnorePop++; history.back();
+    const sc = top.scroll; setTimeout(() => window.scrollTo(0, sc), 0);
+  } else if (!NAV_TRANSIENT.includes(navCur.sub)) {
+    navStack.push(navCur); if (navStack.length > 60) navStack.shift();
+    history.pushState({kisene: navStack.length}, "");
+  }
+  navCur = snap;
+}
+function navApply(n) {
+  S.tab = n.tab; S.sub = n.sub; S.confirm = null;
+  if (n.inv && S.invView) S.invView.tab = n.inv;
+  if (S.help) S.help.lesson = n.lesson;
+  S.filter = {...S.filter, cat: n.cat, year: n.year, imp: n.imp};
+  if (n.sym) S.mkt.sym = n.sym;
+}
+function navBack() {
+  if (navStack.length) { history.back(); return true; }
+  // istorijos nėra: grįžtam pagal hierarchiją
+  if (S.sub && NAV_TRANSIENT.includes(S.sub)) return false;
+  if (S.sub === "help" && S.help?.lesson) { S.help.lesson = null; }
+  else if (S.sub) { if (S.tab === "invest" && S.sub === "chart") S.invView.tab = S.mkt.from === "portfolio" ? "portfolio" : "market"; S.sub = null; }
+  else if (S.filter.imp || S.filter.cat) { S.filter = {...S.filter, imp: null, cat: null, year: null}; }
+  else if (S.tab !== "overview") { const i = TAB_ORDER.indexOf(S.tab); S.tab = TAB_ORDER[Math.max(0, i - 1)]; }
+  else return false;
+  S.confirm = null; navRestoring = true; render(); navRestoring = false; window.scrollTo(0, 0); return true;
+}
+window.addEventListener("popstate", () => {
+  if (navIgnorePop) { navIgnorePop--; return; }
+  const prev = navStack.pop(); if (!prev) return;
+  $("#sheetRoot").innerHTML = "";
+  navApply(prev); navRestoring = true; render(); navRestoring = false;
+  const v = $("#view"); v.classList.remove("slide-l", "slide-r"); void v.offsetWidth; v.classList.add("slide-r");
+  setTimeout(() => window.scrollTo(0, prev.scroll || 0), 0);
+});
+window.addEventListener("scroll", () => { if (navCur) navCur.scroll = window.scrollY; }, {passive: true});
+
 /* ---------- Atvaizdavimas ---------- */
 let renderSeq = 0;
 function viewHtml() {
@@ -89,6 +142,7 @@ async function render(fromData) {
     if (email && $("#aEmail")) $("#aEmail").value = email;
     return;
   }
+  navTrack();
   const ae = document.activeElement;
   if (fromData && ae && $("#view").contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) {
     if (S.tab === "list" && ae.id === "q") $("#listBody").innerHTML = listBody();
@@ -427,13 +481,11 @@ document.addEventListener("touchend", e => {
     if (next > ymOf(todayISO())) return;
     S.ym = next; resetAI(); anim(dx < 0 ? "slide-l" : "slide-r"); render(); return;
   }
-  if (S.sub) {
-    if (dx < 0 || S.sub === "onboard" || S.sub === "recreview") return;
-    if (S.tab === "invest" && S.sub === "chart") S.invView.tab = S.mkt.from === "portfolio" ? "portfolio" : "market";
-    if (S.sub === "help" && S.help?.lesson) { S.help.lesson = null; anim("slide-r"); render(); window.scrollTo(0, 0); return; }
-    S.sub = null; S.confirm = null; anim("slide-r"); render(); window.scrollTo(0, 0); return;
-  }
-  const i = TAB_ORDER.indexOf(S.tab), j = i + (dx < 0 ? 1 : -1);
+  // į dešinę: atgal į ankstesnį langą (arba pagal hierarchiją)
+  if (dx > 0) { if (NAV_TRANSIENT.includes(S.sub)) return; anim("slide-r"); navBack(); return; }
+  // į kairę: tik pagrindinėse skiltyse pereina į kitą skiltį
+  if (S.sub || S.filter.imp) return;
+  const i = TAB_ORDER.indexOf(S.tab), j = i + 1;
   if (i < 0 || j < 0 || j >= TAB_ORDER.length) return;
   if (TAB_ORDER[j] === "list") S.filter.cat = null;
   anim(dx < 0 ? "slide-l" : "slide-r"); go(TAB_ORDER[j]);
@@ -495,6 +547,7 @@ async function signOut() {
   if (channel) { sb.removeChannel(channel); channel = null; }
   try { localStorage.removeItem(cacheKey()); localStorage.removeItem("kisene.market." + S.user.id); } catch (e) {}
   await sb.auth.signOut().catch(() => {});
+  navStack = []; navCur = null;
   S.user = null; S.partner = null; S.linkCode = null; S.txs = new Map(); S.inv = new Map(); S.outbox = []; S.confirm = null; S.tab = "overview"; S.sub = null; resetAI(); S.ai.chat = null; render();
 }
 
