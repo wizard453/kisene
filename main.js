@@ -181,6 +181,7 @@ document.addEventListener("click", async e => {
   if (d.aisuggest) { sendChat(d.aisuggest); return; }
   if (d.aiapply !== undefined) { applyPending(+d.aiapply); return; }
   if (d.aiundo !== undefined) { undoMsg(+d.aiundo); return; }
+  if (d.airetry !== undefined) { retryChat(+d.airetry); return; }
   if (d.aidiscard !== undefined) { const m = S.ai.chat[+d.aidiscard]; if (m) { m.pending = null; m.acts = m.acts.map(a => ({...a, state: "undone"})); saveChat(); render(); } return; }
   if (d.laymove) { moveSection(d.laymove, +d.dir); return; }
   if (d.thmode) { setTheme({mode: d.thmode}); return; }

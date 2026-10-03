@@ -555,3 +555,5 @@ img,svg{-webkit-user-drag:none}
 .tour-card .tc-t b{font-size:15px}
 .tour-card .tc-t small{font-size:13px;color:var(--muted);line-height:1.35}
 .faq summary{color:var(--ink)}
+.caret{display:inline-block;width:7px;height:15px;margin-left:2px;vertical-align:-2px;background:var(--accent);border-radius:2px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}

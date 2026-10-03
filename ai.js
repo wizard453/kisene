@@ -182,53 +182,103 @@ function undoSnapshot(snap) {
 }
 
 /* ---------- Pokalbis ---------- */
+// Pokalbis laikomas tik atmintyje: uždarius programėlę jis dingsta
 const chatKey = () => "kisene.chat." + (S.user?.id || "x");
-function loadChat() { try { return JSON.parse(localStorage.getItem(chatKey()) || "[]"); } catch (e) { return []; } }
-function saveChat() { try { localStorage.setItem(chatKey(), JSON.stringify(S.ai.chat.slice(-40).map(m => ({...m, snap: undefined})))); } catch (e) {} }
-function resetAI() { if (S.ai.ctrl) S.ai.ctrl.abort(); S.ai = {status: "idle", chat: S.ai.chat || loadChat(), ctrl: null}; }
+function loadChat() { try { localStorage.removeItem(chatKey()); } catch (e) {} return []; }
+function saveChat() {}
+function resetAI() { if (S.ai.ctrl) S.ai.ctrl.abort(); S.ai = {status: "idle", chat: S.ai.chat || loadChat(), ctrl: null, live: ""}; }
 const SUGGEST = ["Išanalizuok šį mėnesį", "Kur galėčiau sutaupyti?", "Nustatyk biudžetus pagal mano vidurkį", "Kiek per mėnesį išleidžiu kavinėms?", "Kokios mano prenumeratos?", "Sukurk tikslą atostogoms 1500 € iki birželio"];
 
-async function callAI(messages) {
+// Atsakymas ateina dalimis (srautu), todėl tekstas rodomas iškart, o ne po visos užklausos
+async function callAI(messages, onText) {
   const {data} = await sb.auth.getSession();
   const token = data.session && data.session.access_token;
   if (!token) throw {message: "Sesija baigėsi. Prisijunk iš naujo."};
   const res = await fetch(CFG.SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/ai-advisor", {
     method: "POST", signal: S.ai.ctrl?.signal,
     headers: {"Content-Type": "application/json", Authorization: "Bearer " + token, apikey: CFG.SUPABASE_ANON_KEY},
-    body: JSON.stringify({messages, context: aiContext()})
+    body: JSON.stringify({messages, context: aiContext(), stream: true})
   });
   if (!res.ok) {
     let msg = "AI paslauga nepasiekiama (" + res.status + ").";
     try { const j = await res.json(); if (j.error) msg = j.error; } catch (e) {}
     if (res.status === 404) msg = "AI patarėjas dar neįjungtas (ai-advisor, 404).";
-    throw {message: msg};
+    throw {message: msg, status: res.status};
   }
-  return res.json();
+  // senesnė serverio funkcija grąžina visą atsakymą iškart
+  if (!/event-stream/.test(res.headers?.get?.("content-type") || "") || !res.body) { const j = await res.json(); if (j.text) onText(j.text); return {actions: j.actions || []}; }
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  const actions = []; let buf = "", done = false;
+  while (!done) {
+    const {value, done: end} = await reader.read();
+    if (end) break;
+    buf += dec.decode(value, {stream: true});
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const line = buf.slice(0, i).split("\n").find(l => l.startsWith("data:")); buf = buf.slice(i + 2);
+      if (!line) continue;
+      let ev; try { ev = JSON.parse(line.slice(5)); } catch (e) { continue; }
+      if (ev.t === "delta") onText(ev.text);
+      else if (ev.t === "action") actions.push({name: ev.name, input: ev.input});
+      else if (ev.t === "error") throw {message: ev.message, partial: true, actions};
+      else if (ev.t === "done") done = true;
+    }
+  }
+  if (!done) throw {message: "Ryšys nutrūko.", cut: true, actions};
+  return {actions};
 }
-async function sendChat(text) {
+function paintLive() {
+  if (paintLive.q) return;
+  paintLive.q = requestAnimationFrame(() => {
+    paintLive.q = 0;
+    const el = $("#aiLive"); if (!el) return;
+    el.innerHTML = S.ai.live ? md(S.ai.live) + '<span class="caret"></span>' : '<span class="typing"><i></i><i></i><i></i></span>';
+    const r = el.getBoundingClientRect(); if (r.bottom > innerHeight - 140) window.scrollTo(0, scrollY + r.bottom - innerHeight + 160);
+  });
+}
+async function sendChat(text, retry) {
   text = String(text || "").trim();
   if (!text || S.ai.status === "run") return;
   if (!navigator.onLine) { toast("AI reikia interneto ryšio"); return; }
   if (!S.ai.chat) S.ai.chat = loadChat();
-  S.ai.chat.push({role: "user", content: text, at: Date.now()});
-  S.ai.status = "run"; S.ai.ctrl = new AbortController(); render(); scrollChat();
+  if (!retry) S.ai.chat.push({role: "user", content: text, at: Date.now()});
+  S.ai.status = "run"; S.ai.live = ""; S.ai.ctrl = new AbortController(); render(); scrollChat();
   // istorija modeliui: tekstas ir trumpas atliktų veiksmų sąrašas
-  const hist = S.ai.chat.slice(-16).map(m => ({role: m.role, content: m.role === "assistant" && m.acts?.length ? `${m.content || ""}\n[Atlikta: ${m.acts.filter(x => x.state === "done").map(x => x.label).join("; ")}]` : (m.content || "…")}));
-  try {
-    const r = await callAI(hist);
-    const msg = {role: "assistant", content: r.text || (r.actions?.length ? "Atlikta." : "…"), at: Date.now(), acts: []};
-    if (r.actions?.length) {
+  const hist = S.ai.chat.filter(m => !m.err).slice(-16).map(m => ({role: m.role, content: m.role === "assistant" && m.acts?.length ? `${m.content || ""}\n[Atlikta: ${m.acts.filter(x => x.state === "done").map(x => x.label).join("; ")}]` : (m.content || "…")}));
+  let actions = [], err = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    S.ai.live = ""; err = null;
+    try { actions = (await callAI(hist, t => { S.ai.live += t; paintLive(); })).actions; break; }
+    catch (e) {
+      err = e;
+      // jei ryšys nutrūko dar negavus jokio teksto, bandom dar kartą automatiškai
+      const net = e && (e.cut || e.name === "TypeError" || /load failed|failed to fetch|network/i.test(e.message || ""));
+      if (e && e.name === "AbortError") break;
+      if (!(net && !S.ai.live && attempt === 0)) { actions = e.actions || []; break; }
+      await new Promise(r => setTimeout(r, 700));
+    }
+  }
+  const live = S.ai.live.trim();
+  if (err && err.name === "AbortError") S.ai.chat.push({role: "assistant", content: (live ? live + "\n\n" : "") + "_Sustabdyta._", at: Date.now(), err: !live});
+  else if (err && !live && !actions.length) {
+    const net = err.cut || err.name === "TypeError" || /load failed|failed to fetch|network/i.test(err.message || "");
+    S.ai.chat.push({role: "assistant", content: net ? "Ryšys su AI nutrūko. Patikrink internetą ir bandyk dar kartą. Laukiant atsakymo neuždaryk programėlės." : (err.message || "Nepavyko gauti atsakymo."), at: Date.now(), err: true, retry: text});
+  } else {
+    const msg = {role: "assistant", content: live || (actions.length ? "Atlikta." : "…"), at: Date.now(), acts: []};
+    if (err) { msg.content += "\n\n_Atsakymas nutrūko._"; msg.retry = text; }
+    if (actions.length) {
       const auto = S.cfg.prefs?.aiAuto !== false;
-      msg.pending = auto ? null : r.actions;
-      if (auto) { const snap = snapshot(); msg.snap = snap; msg.acts = r.actions.map(a => { const res = applyAction(a, snap); return typeof res === "string" ? {label: res, state: "done"} : {label: res.fail, state: "fail"}; }); }
-      else msg.acts = r.actions.map(a => ({label: describeAction(a), state: "pending"}));
+      msg.pending = auto ? null : actions;
+      if (auto) { const snap = snapshot(); msg.snap = snap; msg.acts = actions.map(a => { const res = applyAction(a, snap); return typeof res === "string" ? {label: res, state: "done"} : {label: res.fail, state: "fail"}; }); }
+      else msg.acts = actions.map(a => ({label: describeAction(a), state: "pending"}));
     }
     S.ai.chat.push(msg);
-  } catch (e) {
-    if (e && e.name === "AbortError") S.ai.chat.push({role: "assistant", content: "Sustabdyta.", at: Date.now(), err: true});
-    else S.ai.chat.push({role: "assistant", content: (e && e.message) || "Nepavyko gauti atsakymo.", at: Date.now(), err: true});
   }
-  S.ai.status = "idle"; S.ai.ctrl = null; saveChat(); render(); scrollChat();
+  S.ai.status = "idle"; S.ai.ctrl = null; S.ai.live = ""; render(); scrollChat();
+}
+function retryChat(idx) {
+  const m = S.ai.chat[idx]; if (!m?.retry) return;
+  const q = m.retry; S.ai.chat.splice(idx, 1); sendChat(q, true);
 }
 function describeAction(a) {
   const i = a.input || {};
@@ -257,13 +307,14 @@ function vAI() {
   const auto = S.cfg.prefs?.aiAuto !== false;
   const msgs = chat.map((m, i) => m.role === "user" ? `<div class="msg me">${esc(m.content)}</div>` : `<div class="msg ai ${m.err ? "err" : ""}">${md(m.content || "")}
     ${m.acts?.length ? `<div class="acts">${m.acts.map(a => `<div class="act ${a.state}"><span class="ic">${a.state === "done" ? "✓" : a.state === "fail" ? "!" : a.state === "undone" ? "↶" : "?"}</span><span>${esc(a.label)}</span></div>`).join("")}
-      ${m.pending ? `<div class="row"><button class="btn small" data-aiapply="${i}">Pritaikyti</button><button class="btn ghost small" data-aidiscard="${i}">Atmesti</button></div>` : m.snap ? `<div class="row"><button class="linkbtn" data-aiundo="${i}">Atšaukti šiuos pakeitimus</button></div>` : ""}</div>` : ""}</div>`).join("");
+      ${m.pending ? `<div class="row"><button class="btn small" data-aiapply="${i}">Pritaikyti</button><button class="btn ghost small" data-aidiscard="${i}">Atmesti</button></div>` : m.snap ? `<div class="row"><button class="linkbtn" data-aiundo="${i}">Atšaukti šiuos pakeitimus</button></div>` : ""}</div>` : ""}
+    ${m.retry && i === chat.length - 1 && !run ? `<div class="row"><button class="btn small ghost" data-airetry="${i}">Bandyti dar kartą</button></div>` : ""}</div>`).join("");
   return `<div class="ai-top"><div class="subhead"><button class="linkbtn" data-sub="">‹ Daugiau</button><h2>AI patarėjas</h2></div>${chat.length ? `<button class="linkbtn" id="aiClear">Naujas pokalbis</button>` : ""}</div>
   <div class="chat">
     ${!chat.length ? `<div class="ai-hello"><b>Klausk apie savo pinigus</b><span>Matau tavo pajamas, išlaidas, biudžetus, tikslus ir investicijas. Galiu analizuoti ir ${auto ? "iškart pakeisti" : "pasiūlyti pakeitimus"}: biudžetus, kategorijas, taisykles, tikslus, pasikartojančias operacijas. Kiekvieną pakeitimą galėsi atšaukti.</span>
       <label class="check"><input type="checkbox" id="aiAuto" ${auto ? "checked" : ""}> Pakeitimus taikyti iš karto (neklausti)</label></div>` : ""}
     ${msgs}
-    ${run ? `<div class="msg ai"><span class="typing"><i></i><i></i><i></i></span></div>` : ""}
+    ${run ? `<div class="msg ai" id="aiLive">${S.ai.live ? md(S.ai.live) + '<span class="caret"></span>' : '<span class="typing"><i></i><i></i><i></i></span>'}</div>` : ""}
     <div class="suggest">${SUGGEST.map(q => `<button data-aisuggest="${esc(q)}" ${run ? "disabled" : ""}>${esc(q)}</button>`).join("")}</div>
   </div>
   <div class="chatbar"><form id="chatForm"><textarea id="chatIn" rows="1" placeholder="Parašyk klausimą arba ką pakeisti…" ${run ? "disabled" : ""}></textarea>
