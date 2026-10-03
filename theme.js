@@ -87,6 +87,7 @@ function moreItems() {
   return [
     {group: "Finansai", items: [
       ["wealth", "Turtas", "Grynoji vertė ir jos pokytis", "coin", "c7"],
+      ["together", "Bendra paskyra", S.partner ? "Susieta su " + partnerName() : "Bendras biudžetas dviese", "heart", "c5"],
       ["year", "Metų ataskaita", "Metai skaičiais ir palyginimas", "receipt", "c1"],
       ["accounts", "Sąskaitos ir skolos", `${nAcc} sąskaitos`, "bank", "c11"],
       ["budgets", "Biudžetai", "Mėnesio ribos kategorijoms", "percent", "c2"],

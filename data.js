@@ -79,21 +79,29 @@ function saveMarket() { try { localStorage.setItem("kisene.market." + S.user.id,
 /* ---------- Eilutės formatai ---------- */
 const TX_COLS = "id,type,cat,amount,date,note,account_id,to_account_id,memo,recurring_id,created_at";
 const INV_COLS = "id,date,kind,platform,symbol,name,isin,qty,price,currency,amount,fee,amount_eur,note,created_at";
+// import_id stulpelis (kuriam failui priklauso operacija). Jei serverio lentelė jo dar neturi, programėlė veikia ir be jo.
+const impOk = () => S.impCol !== false;
+function noImpCol() {
+  S.impCol = false;
+  for (const o of S.outbox) if (o.row) delete o.row.import_id;
+}
 function txRow(t) {
   return {id: t.id, type: t.type, cat: t.type === "trf" ? "transfer" : t.cat, amount: r2(t.amount), date: t.date, note: (t.note || "").slice(0, 120),
-    account_id: t.account_id || "main", to_account_id: t.type === "trf" ? (t.to_account_id || null) : null, memo: (t.memo || "").slice(0, 300), recurring_id: t.recurring_id || null};
+    account_id: t.account_id || "main", to_account_id: t.type === "trf" ? (t.to_account_id || null) : null, memo: (t.memo || "").slice(0, 300), recurring_id: t.recurring_id || null,
+    ...(impOk() ? {import_id: t.import_id || null} : {})};
 }
 function normTx(r) {
   return {id: r.id, type: r.type, cat: r.cat, amount: Number(r.amount), date: String(r.date).slice(0, 10), note: r.note || "", account_id: r.account_id || "main",
-    to_account_id: r.to_account_id || null, memo: r.memo || "", recurring_id: r.recurring_id || null, created_at: r.created_at};
+    to_account_id: r.to_account_id || null, memo: r.memo || "", recurring_id: r.recurring_id || null, import_id: r.import_id || null, created_at: r.created_at};
 }
 function invRow(t) {
   const n = v => Number.isFinite(+v) ? +v : 0;
   return {id: t.id, date: t.date, kind: t.kind, platform: (t.platform || "").slice(0, 60), symbol: (t.symbol || "").slice(0, 40), name: (t.name || "").slice(0, 120),
     isin: (t.isin || "").slice(0, 20), qty: n(t.qty), price: n(t.price), currency: (t.currency || "EUR").toUpperCase().slice(0, 8), amount: r2(n(t.amount)), fee: r2(n(t.fee)),
-    amount_eur: t.amount_eur == null || t.amount_eur === "" ? null : r2(n(t.amount_eur)), note: (t.note || "").slice(0, 200)};
+    amount_eur: t.amount_eur == null || t.amount_eur === "" ? null : r2(n(t.amount_eur)), note: (t.note || "").slice(0, 200),
+    ...(impOk() ? {import_id: t.import_id || null} : {})};
 }
-function normInv(r) { return {...invRow(r), created_at: r.created_at}; }
+function normInv(r) { return {...invRow(r), import_id: r.import_id || null, created_at: r.created_at}; }
 
 /* ---------- Pakeitimų eilė ---------- */
 function enqueue(op) {
@@ -127,6 +135,9 @@ async function flush() {
         ({error, status} = await sb.from(op.table).upsert(batch));
       } else if (op.kind === "delete") {
         ({error, status} = await sb.from(op.table).delete().eq("id", op.id));
+      } else if (op.kind === "delmany") {
+        ({error, status} = await sb.from(op.table).delete().in("id", op.ids.slice(0, 300)));
+        if (!error && op.ids.length > 300) { op.ids = op.ids.slice(300); saveCache(); continue; }
       } else if (op.kind === "wipe") {
         ({error, status} = await sb.from(op.table).delete().eq("user_id", S.user.id));
       } else if (op.kind === "settings") {
@@ -134,6 +145,7 @@ async function flush() {
         for (const f of op.fields) { if (f === "demo_dismissed") row.demo_dismissed = S.demoDismissed; else row[f] = S.cfg[f]; }
         ({error, status} = await sb.from("settings").upsert(row));
       }
+      if (error && op.kind === "upsert" && impOk() && /import_id/i.test(error.message || "")) { noImpCol(); continue; }
       if (error) {
         const st = Number(status || 0);
         const permanent = (st >= 400 && st < 500 && ![401, 408, 429].includes(st)) || /violates|invalid input|check constraint|does not exist/i.test(error.message || "");
@@ -160,7 +172,7 @@ async function flush() {
 async function fetchTable(table, cols) {
   const all = [];
   for (let from = 0; ; from += 1000) {
-    const {data, error} = await sb.from(table).select(cols).order("date", {ascending: false}).order("id").range(from, from + 999);
+    const {data, error} = await sb.from(table).select(cols).eq("user_id", S.user.id).order("date", {ascending: false}).order("id").range(from, from + 999);
     if (error) throw error;
     all.push(...data);
     if (data.length < 1000) break;
@@ -172,8 +184,10 @@ async function fetchAll() {
   setSync("busy");
   let txs, inv, set;
   try {
-    [txs, inv] = await Promise.all([fetchTable("transactions", TX_COLS), fetchTable("inv_tx", INV_COLS)]);
-    const r = await sb.from("settings").select("*").maybeSingle();
+    const ic = impOk() ? ",import_id" : "";
+    try { [txs, inv] = await Promise.all([fetchTable("transactions", TX_COLS + ic), fetchTable("inv_tx", INV_COLS + ic)]); }
+    catch (e) { if (!ic || !/import_id/i.test(e.message || "")) throw e; noImpCol(); [txs, inv] = await Promise.all([fetchTable("transactions", TX_COLS), fetchTable("inv_tx", INV_COLS)]); }
+    const r = await sb.from("settings").select("*").eq("user_id", S.user.id).maybeSingle();
     if (r.error) throw r.error;
     set = r.data;
   } catch (e) {
@@ -189,6 +203,7 @@ async function fetchAll() {
       if (op.kind === "wipe") map.clear();
       if (op.kind === "upsert") { const prev = map.get(op.id), v = norm(op.row); if (prev && !v.created_at) v.created_at = prev.created_at; map.set(op.id, v); }
       if (op.kind === "delete") map.delete(op.id);
+      if (op.kind === "delmany") op.ids.forEach(id => map.delete(id));
     }
     return map;
   };
@@ -206,6 +221,7 @@ async function fetchAll() {
   if (typeof maybeOnboard === "function") maybeOnboard();
   if (typeof maybeTour === "function") maybeTour();
   flush();
+  if (typeof fetchPartner === "function") fetchPartner();
 }
 
 function subscribe() {
@@ -264,6 +280,15 @@ function saveInv(t) {
   enqueue({kind: "upsert", table: "inv_tx", id: row.id, row});
 }
 function removeInv(id) { S.inv.delete(id); enqueue({kind: "delete", table: "inv_tx", id}); }
+// daug operacijų ištrinama viena užklausa
+function bulkDelete(table, ids) {
+  if (!ids.length) return;
+  const map = table === "inv_tx" ? S.inv : S.txs, set = new Set(ids);
+  ids.forEach(id => map.delete(id));
+  S.outbox = S.outbox.filter(o => !(o.table === table && (o.kind === "upsert" || o.kind === "delete") && set.has(o.id)));
+  S.outbox.push({kind: "delmany", table, ids: [...ids]});
+  refreshDemo(); saveCache(); flush();
+}
 function bulkUpsert(table, rows) {
   const map = table === "inv_tx" ? S.inv : S.txs;
   const now = new Date().toISOString();

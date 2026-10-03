@@ -252,7 +252,7 @@ async function vImport() {
     <div class="row"><label class="btn ghost small" for="bankFile" style="cursor:pointer">Pasirinkti CSV failą</label><input type="file" id="bankFile" accept=".csv,text/csv,.txt" hidden>${imp ? `<span class="fine">${esc(imp.name)} · ${imp.preset === "swedbank" ? "Swedbank formatas" : imp.preset === "revolut" ? "Revolut formatas" : "bendras formatas"}</span>` : ""}</div>
     ${!(S.cfg.prefs?.ownName) ? `<div class="hint">Patarimas: skiltyje <button class="linkbtn" data-sub="app">Paskyra ir programėlė</button> įrašyk savo vardą ir pavardę, tada pervedimai sau į kitus bankus bus atpažinti automatiškai.</div>` : ""}
   </div>`;
-  if (!imp) return body;
+  if (!imp) return body + vImportsList("bank");
   const {cands, skipped, balances} = await bankCandidates(imp);
   imp.balances = balances;
   const rows = cands.map(c => classifyBank(c, imp));
@@ -283,7 +283,10 @@ function bankOverride(id, choice) {
 }
 function doBankImport() {
   const imp = S.imp; if (!imp) return;
-  const rows = (imp._fresh || []).filter(r => r.type !== "skip").map(r => txRow(r));
+  const fresh = (imp._fresh || []).filter(r => r.type !== "skip");
+  const ds = fresh.map(r => r.date).sort();
+  const impId = fresh.length ? recordImport("bank", {file: imp.name || "", account_id: imp.account_id, from: ds[0], to: ds[ds.length - 1]}) : null;
+  const rows = fresh.map(r => txRow({...r, import_id: impId}));
   if (rows.length) bulkUpsert("transactions", rows);
   if (imp.learn && imp.learned) {
     const rules = [...(S.cfg.rules || [])];

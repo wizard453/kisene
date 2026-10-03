@@ -173,7 +173,7 @@ function mountBars(sel, monthsArr) {
 /* ---------- Apžvalga ---------- */
 function vOverview() {
   const txs = allTx(); const a = monthAgg(S.ym, txs);
-  const parts = {hero: ovHero, review: ovReview, wealth: () => vWealth(), spend: ovSpend, income: ovIncome, insights: ovInsights, goals: () => vGoalsMini(), trend: ovTrend, recent: ovRecent};
+  const parts = {hero: ovHero, together: () => ovTogether(), review: ovReview, wealth: () => vWealth(), spend: ovSpend, income: ovIncome, insights: ovInsights, goals: () => vGoalsMini(), trend: ovTrend, recent: ovRecent};
   const body = overviewLayout().filter(x => x.on).map(x => parts[x.id](a, txs)).join("");
   return `
   ${S.demo ? `<div class="banner"><span>Rodomi <b>pavyzdiniai duomenys</b>. Pridėk pirmą operaciją arba importuok banko išrašą, ir jie išnyks.</span><button class="linkbtn" id="hideDemo">Slėpti</button></div>` : ""}
@@ -313,11 +313,17 @@ function vList() {
   const fy = S.filter.cat && S.filter.year ? " · " + S.filter.year : "";
   return `
   <input class="search" id="q" type="search" placeholder="Ieškoti pagal aprašymą ar kategoriją" value="${esc(S.filter.q)}" autocomplete="off">
-  <div class="filters">${fc ? `<button class="chip on" data-clearcat="1"><i style="background:var(--${fc.color})"></i>${esc(fc.name)}${fy} ✕</button>` : [["all", "Visos"], ["exp", "Išlaidos"], ["inc", "Pajamos"], ["trf", "Pervedimai"]].map(([k, n]) => `<button class="chip" data-ftype="${k}" aria-pressed="${S.filter.type === k}">${n}</button>`).join("")}
+  <div class="filters">${S.filter.imp ? `<button class="chip on" data-clearimp="1">${icon("receipt", 14)} Vieno failo operacijos ✕</button>` : fc ? `<button class="chip on" data-clearcat="1"><i style="background:var(--${fc.color})"></i>${esc(fc.name)}${fy} ✕</button>` : [["all", "Visos"], ["exp", "Išlaidos"], ["inc", "Pajamos"], ["trf", "Pervedimai"]].map(([k, n]) => `<button class="chip" data-ftype="${k}" aria-pressed="${S.filter.type === k}">${n}</button>`).join("")}
   ${accs.length > 1 ? `<select class="chip" id="fAcc" aria-label="Sąskaita"><option value="all">Visos sąskaitos</option>${accs.map(a => `<option value="${esc(a.id)}" ${S.filter.acc === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>` : ""}</div>
   <div id="listBody">${listBody()}</div>`;
 }
 function listBody() {
+  if (S.filter.imp) {
+    const rows = importItems(S.filter.imp).sort((x, y) => y.date.localeCompare(x.date));
+    let html = "", last = "";
+    for (const t of rows.slice(0, 600)) { if (t.date !== last) { last = t.date; const d = new Date(t.date + "T12:00"); html += `<div class="day">${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()} ${d.getFullYear()}</div>`; } html += txItem(t); }
+    return `<div class="fine" style="margin:0 2px 8px">Failo operacijos: ${rows.length}</div><div class="txs">${html || '<div class="empty">Operacijų nebėra.</div>'}</div>`;
+  }
   const q = S.filter.q.trim().toLowerCase();
   const allMonths = q.length >= 2 || !!(S.filter.cat && S.filter.year);
   const rows = allTx().filter(t => (q.length >= 2 || (S.filter.cat && S.filter.year ? t.date.startsWith(S.filter.year) : ymOf(t.date) === S.ym)) && (S.filter.cat ? t.cat === S.filter.cat : (S.filter.type === "all" || t.type === S.filter.type)) &&

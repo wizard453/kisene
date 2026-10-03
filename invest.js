@@ -426,7 +426,7 @@ async function vInvImport() {
   let body = `<div class="subhead"><button class="linkbtn" data-sub="">‹ Investicijos</button><h2>Investicijų importas</h2></div>
   <div class="set-group"><div class="fine">Įkelk operacijų istoriją CSV formatu. Trading 212 ir Revolut failai atpažįstami automatiškai. Bet kokiai kitai platformai priskirk stulpelius pats: užtenka datos, sumos ir, jei tai pirkimai ar pardavimai, simbolio bei kiekio. Tą patį failą įkėlus dar kartą, dublikatų nebus.</div>
     <div class="row"><label class="btn ghost small" for="invFile" style="cursor:pointer">Pasirinkti CSV failą</label><input type="file" id="invFile" accept=".csv,text/csv,.txt" hidden>${imp ? `<span class="fine">${esc(imp.name)}${imp.preset !== "generic" ? " · " + esc(PRESET_NAMES[imp.preset]) + " formatas" : ""}</span>` : ""}</div></div>`;
-  if (!imp) return body;
+  if (!imp) return body + vImportsList("inv");
   const {cands, skipped} = await invCandidates(imp);
   const fresh = cands.filter(c => !S.inv.has(c.id)), dup = cands.length - fresh.length;
   imp._fresh = fresh;
@@ -458,7 +458,9 @@ async function doInvImport() {
   const metaUpd = {...(S.cfg.assets || {})};
   for (const r of rows) { const k = assetKey(r); if (k && r.priceCur && !metaUpd[k]?.currency) metaUpd[k] = {...(metaUpd[k] || {}), currency: r.priceCur}; }
   S.cfg.assets = metaUpd; saveSettings("assets");
-  bulkUpsert("inv_tx", rows.map(invRow));
+  const ds = rows.map(r => r.date).sort();
+  const impId = recordImport("inv", {file: imp.name || "", platform: imp.platform.trim(), from: ds[0], to: ds[ds.length - 1]});
+  bulkUpsert("inv_tx", rows.map(r => invRow({...r, import_id: impId})));
   S.invImp = null; S.sub = null; S.tab = "invest";
   render(); toast(`Importuota ${rows.length} operacijų`);
   refreshMarket(true);

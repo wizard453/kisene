@@ -203,13 +203,19 @@ function openGoalSheet(goal) {
 
 /* ---------- Apžvalgos išdėstymas ---------- */
 const OVERVIEW_SECTIONS = [
-  ["hero", "Laisvi pinigai šiam mėnesiui"], ["review", "Operacijos be kategorijos"], ["wealth", "Turtas"], ["spend", "Kur keliauja pinigai"],
+  ["hero", "Laisvi pinigai šiam mėnesiui"], ["together", "Bendras biudžetas (susietos paskyros)"], ["review", "Operacijos be kategorijos"], ["wealth", "Turtas"], ["spend", "Kur keliauja pinigai"],
   ["income", "Iš kur ateina pajamos"], ["insights", "Pastebėjimai"], ["goals", "Tikslai"], ["trend", "Pusė metų"], ["recent", "Naujausios operacijos"]
 ];
 function overviewLayout() {
   const saved = S.cfg.prefs?.layout || [];
   const out = saved.filter(x => OVERVIEW_SECTIONS.some(s => s[0] === x.id));
-  for (const [id] of OVERVIEW_SECTIONS) if (!out.some(x => x.id === id)) out.push({id, on: true});
+  // naujos skiltys įterpiamos savo vietoje, ne gale
+  OVERVIEW_SECTIONS.forEach(([id], i) => {
+    if (out.some(x => x.id === id)) return;
+    const prev = OVERVIEW_SECTIONS.slice(0, i).reverse().find(([p]) => out.some(x => x.id === p));
+    const at = prev ? out.findIndex(x => x.id === prev[0]) + 1 : 0;
+    out.splice(at, 0, {id, on: true});
+  });
   return out;
 }
 function saveLayout(l) { S.cfg.prefs = {...(S.cfg.prefs || {}), layout: l}; saveSettings("prefs"); }

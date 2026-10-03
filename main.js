@@ -77,7 +77,7 @@ function viewHtml() {
   if (S.tab === "overview") return vOverview();
   if (S.tab === "list") return vList();
   if (S.tab === "invest") return vInvest();
-  const subs = {ai: vAI, import: vImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp};
+  const subs = {ai: vAI, import: vImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp, together: vTogether};
   return (subs[S.sub] || vMore)();
 }
 async function render(fromData) {
@@ -186,8 +186,9 @@ document.addEventListener("click", async e => {
   const t = e.target.closest("button,[data-edit],[data-goal],[data-catfilter]"); if (!t || t.closest("#sheetRoot") || t.closest("#toastRoot")) return;
   const d = t.dataset;
   if (d.am) { S.authMode = d.am; S.authErr = ""; S.authMsg = ""; render(); return; }
-  if (d.tab) { if (d.tab === "list") S.filter.cat = null; go(d.tab); return; }
+  if (d.tab) { if (d.tab === "list") { S.filter.cat = null; S.filter.imp = null; } go(d.tab); return; }
   if (d.catfilter) { S.filter = {...S.filter, cat: d.catfilter, q: "", year: d.catyear || null}; go("list"); return; }
+  if (d.clearimp) { S.filter.imp = null; render(); return; }
   if (d.clearcat) { S.filter.cat = null; S.filter.year = null; render(); return; }
   if (d.year) { S.year = d.year; render(); return; }
   if (d.gomonth) { S.ym = d.gomonth; resetAI(); render(); window.scrollTo(0, 0); return; }
@@ -494,7 +495,7 @@ async function signOut() {
   if (channel) { sb.removeChannel(channel); channel = null; }
   try { localStorage.removeItem(cacheKey()); localStorage.removeItem("kisene.market." + S.user.id); } catch (e) {}
   await sb.auth.signOut().catch(() => {});
-  S.user = null; S.txs = new Map(); S.inv = new Map(); S.outbox = []; S.confirm = null; S.tab = "overview"; S.sub = null; resetAI(); S.ai.chat = null; render();
+  S.user = null; S.partner = null; S.linkCode = null; S.txs = new Map(); S.inv = new Map(); S.outbox = []; S.confirm = null; S.tab = "overview"; S.sub = null; resetAI(); S.ai.chat = null; render();
 }
 
 /* ---------- Paleidimas ---------- */
