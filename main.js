@@ -450,7 +450,17 @@ async function signOut() {
 
 /* ---------- Paleidimas ---------- */
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  // Nauja versija: tikrinama atidarant ir grįžtant į programėlę, o radus ją puslapis perkraunamas
+  const hadController = !!navigator.serviceWorker.controller;
+  let swReg = null, reloading = false;
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").then(r => { swReg = r; }).catch(() => {}));
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && swReg) swReg.update().catch(() => {}); });
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloading) return;
+    const busy = $("#sheetRoot").children.length || editable(document.activeElement) || tourActive();
+    if (busy) { toast("Yra nauja versija. Ji įsijungs kitą kartą atidarius programėlę."); return; }
+    reloading = true; location.reload();
+  });
 }
 render();
 setTimeout(hideSplash, 4000);
