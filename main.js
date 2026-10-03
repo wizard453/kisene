@@ -103,7 +103,10 @@ function navApply(n) {
   S.filter = {...S.filter, cat: n.cat, year: n.year, imp: n.imp};
   if (n.sym) S.mkt.sym = n.sym;
 }
+let navBackAt = 0;
 function navBack() {
+  if (Date.now() - navBackAt < 300) return true;
+  navBackAt = Date.now();
   if (navStack.length) { history.back(); return true; }
   // istorijos nėra: grįžtam pagal hierarchiją
   if (S.sub && NAV_TRANSIENT.includes(S.sub)) return false;
@@ -114,8 +117,12 @@ function navBack() {
   else return false;
   S.confirm = null; navRestoring = true; render(); navRestoring = false; window.scrollTo(0, 0); return true;
 }
+let navPopAt = 0;
 window.addEventListener("popstate", () => {
   if (navIgnorePop) { navIgnorePop--; return; }
+  // du „atgal“ tuo pačiu gestu (programėlės ir telefono): antrąjį atšaukiam
+  if (Date.now() - navPopAt < 250) { history.pushState({kisene: navStack.length + 1}, ""); return; }
+  navPopAt = Date.now();
   const prev = navStack.pop(); if (!prev) return;
   $("#sheetRoot").innerHTML = "";
   navApply(prev); navRestoring = true; render(); navRestoring = false;
@@ -467,6 +474,9 @@ document.addEventListener("touchstart", e => {
   if (e.touches.length !== 1 || !S.user || tourActive()) return;
   const t = e.target;
   if (t.closest("#sheetRoot,#tourRoot,#tabs,input,select,textarea,.chart,[data-noswipe]") || hScrollable(t)) return;
+  // prie pat ekrano krašto telefonas pats atlieka „atgal“ gestą, todėl čia jo nedubliuojam
+  const x0 = e.touches[0].clientX;
+  if (x0 < 32 || x0 > window.innerWidth - 32) return;
   const mode = t.closest("#monthBox") ? "month" : $("#appScreen").contains(t) ? "tab" : null;
   if (mode) swipe = {mode, x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now()};
 }, {passive: true});
@@ -548,7 +558,7 @@ async function signOut() {
   try { localStorage.removeItem(cacheKey()); localStorage.removeItem("kisene.market." + S.user.id); } catch (e) {}
   await sb.auth.signOut().catch(() => {});
   navStack = []; navCur = null;
-  S.user = null; S.partner = null; S.linkCode = null; S.txs = new Map(); S.inv = new Map(); S.outbox = []; S.confirm = null; S.tab = "overview"; S.sub = null; resetAI(); S.ai.chat = null; render();
+  S.user = null; S.partner = null; S.sgoals = null; S.linkCode = null; S.txs = new Map(); S.inv = new Map(); S.outbox = []; S.confirm = null; S.tab = "overview"; S.sub = null; resetAI(); S.ai.chat = null; render();
 }
 
 /* ---------- Paleidimas ---------- */

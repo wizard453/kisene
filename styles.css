@@ -621,3 +621,14 @@ i.pa{background:var(--gold)}
 .tog-cb i{display:block;height:100%}
 .tog-c b{font-size:12.5px;min-width:56px;text-align:right}
 .link-code{font-size:34px;letter-spacing:.18em;text-align:center;padding:12px;border-radius:14px;background:var(--accent-soft);color:var(--accent);font-weight:600}
+/* Bendri tikslai */
+.sg{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.sg:first-of-type{border-top:0}
+.sg .g1{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.sgbar{display:flex;height:10px;border-radius:5px;background:var(--line);overflow:hidden}
+.sgbar i{display:block;height:100%}
+.sg-form{margin-top:2px}
+.sg-new{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.tog-goals{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:10px}
+.two>*{min-width:0}
+.field select,.field input{width:100%;min-width:0}

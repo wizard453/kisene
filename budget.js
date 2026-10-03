@@ -606,7 +606,8 @@ function vGoals() {
   <div class="fine" style="margin-top:-6px">Paspausk tikslą, kad pakeistum jo sumą, terminą ar spalvą.</div>
   ${goals.length ? goals.map(g => `<div class="set-group">${goalCard(g)}
     <form class="row" data-goalform="${esc(g.id)}"><input class="inp" name="amt" inputmode="decimal" placeholder="Suma" style="width:110px"><button class="btn small" name="add">Įnešti</button><button class="btn ghost small" name="sub" type="button" data-goalsub="${esc(g.id)}">Išimti</button></form></div>`).join("") : `<div class="txs"><div class="empty">Tikslų dar nėra.</div></div>`}
-  <button class="btn ghost" id="addGoal">Naujas tikslas</button>`;
+  <button class="btn ghost" id="addGoal">Naujas tikslas</button>
+  ${S.partner ? `<div class="set-group"><h3>Bendri tikslai su ${esc(partnerName())}</h3>${(S.sgoals || []).map(g => sgCard(g, false)).join("") || `<div class="fine">Bendrų tikslų dar nėra.</div>`}<button class="linkbtn" data-go="more" data-sub="together" style="align-self:flex-start">Tvarkyti bendrus tikslus</button></div>` : ""}`;
 }
 /* ---------- Peržiūra: operacijos be kategorijos ---------- */
 function reviewGroups() {
