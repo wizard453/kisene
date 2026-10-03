@@ -200,7 +200,7 @@ async function callAI(messages) {
   if (!res.ok) {
     let msg = "AI paslauga nepasiekiama (" + res.status + ").";
     try { const j = await res.json(); if (j.error) msg = j.error; } catch (e) {}
-    if (res.status === 404) msg = "AI funkcija dar neįdiegta Supabase projekte (ai-advisor).";
+    if (res.status === 404) msg = "AI patarėjas dar neįjungtas (ai-advisor, 404).";
     throw {message: msg};
   }
   return res.json();

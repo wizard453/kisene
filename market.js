@@ -187,7 +187,7 @@ function openBrokerSheet() {
   const root = $("#sheetRoot"); const close = () => { root.innerHTML = ""; };
   root.innerHTML = `<div class="sheet-bg" id="sheetBg"><form class="sheet" id="brkForm" role="dialog" aria-modal="true" aria-label="Trading 212">
     <div class="grab"></div><h3 class="sheet-h">${c ? "Trading 212" : "Prijungti Trading 212"}</h3>
-    ${c ? `<div class="fine">Prijungta ${new Date(c.created_at).toLocaleDateString("lt-LT")}. Raktai saugomi užšifruoti serveryje ir programėlei neatskleidžiami.</div>
+    ${c ? `<div class="fine">Prijungta ${new Date(c.created_at).toLocaleDateString("lt-LT")}.</div>
       <div class="row"><button class="btn ghost small" type="button" id="brkFull">Sinchronizuoti viską iš naujo</button><button class="btn danger small" type="button" id="brkOff">Atjungti</button></div>`
     : `<ol class="steps">
         <li>Trading 212 programėlėje atidaryk <b>Nustatymai → API (Beta)</b> ir sukurk naują raktą.</li>
@@ -195,7 +195,7 @@ function openBrokerSheet() {
         <li>Nukopijuok API raktą ir slaptą raktą (rodomas tik vieną kartą) ir įklijuok čia.</li></ol>
       <label class="field">API raktas<input id="brkKey" autocomplete="off" required></label>
       <label class="field">Slaptas raktas (API secret)<input id="brkSecret" type="password" autocomplete="off"></label>
-      <div class="fine">Veikia tik Invest ir Stocks ISA sąskaitos. Raktai saugomi užšifruoti tavo Supabase serveryje ir naudojami tik duomenims nuskaityti.</div>
+      <div class="fine">Veikia Invest ir Stocks ISA sąskaitos.</div>
       <div id="brkErr" class="err" hidden></div>
       <button class="btn" id="brkSave">Prijungti</button>`}
     <button class="btn ghost" type="button" id="brkClose">Uždaryti</button></form></div>`;

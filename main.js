@@ -58,12 +58,12 @@ function vApp() {
       : `<div class="fine">Naršyklės meniu (⋮) pasirink „Įdiegti programą“ arba „Pridėti prie pradžios ekrano“.</div>`}
   </div>` : ""}
   <div class="set-group"><h3>Duomenys</h3>
-    <div class="fine">Duomenys saugomi tavo Supabase duomenų bazėje ir sinchronizuojami tarp įrenginių. Be interneto pakeitimai laukia eilėje ir išsiunčiami atsiradus ryšiui.</div>
     <div class="row"><button class="btn ghost small" id="exportCsv" ${!S.txs.size ? "disabled" : ""}>Eksportuoti biudžetą</button><button class="btn ghost small" id="exportInvCsv" ${!S.inv.size ? "disabled" : ""}>Eksportuoti investicijas</button></div>
     <div class="row">${c === "wipe" ? `<button class="btn danger small" id="wipeYes">Taip, ištrinti ${S.txs.size} operacijas</button><button class="btn ghost small" data-confirm="">Atšaukti</button>` : `<button class="btn ghost small" data-confirm="wipe" ${!S.txs.size ? "disabled" : ""}>Ištrinti biudžeto operacijas</button>`}
     ${c === "wipeinv" ? `<button class="btn danger small" id="wipeInvYes">Taip, ištrinti ${S.inv.size} investicijų operacijas</button><button class="btn ghost small" data-confirm="">Atšaukti</button>` : `<button class="btn ghost small" data-confirm="wipeinv" ${!S.inv.size ? "disabled" : ""}>Ištrinti investicijas</button>`}</div>
     ${S.demoDismissed && !S.txs.size ? `<button class="linkbtn" id="showDemo" style="align-self:flex-start">Rodyti pavyzdinius duomenis</button>` : ""}
     <button class="linkbtn" id="runOnboard" style="align-self:flex-start">Paleisti pradžios vedlį iš naujo</button>
+    <button class="linkbtn" id="runTour" style="align-self:flex-start">Parodyti mokomąjį turą</button>
   </div>`;
 }
 function maybeOnboard() {
@@ -77,7 +77,7 @@ function viewHtml() {
   if (S.tab === "overview") return vOverview();
   if (S.tab === "list") return vList();
   if (S.tab === "invest") return vInvest();
-  const subs = {ai: vAI, import: vImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview};
+  const subs = {ai: vAI, import: vImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp};
   return (subs[S.sub] || vMore)();
 }
 async function render(fromData) {
@@ -102,7 +102,7 @@ async function render(fromData) {
   $("#mPick").value = S.ym; $("#mPick").max = ymOf(todayISO());
   $("#mNext").disabled = S.ym >= ymOf(todayISO());
   $("#pageTitle").textContent = monthly || S.tab === "more" ? "" : S.tab === "invest" ? "Investicijos" : "";
-  $("#fab").hidden = S.tab === "more" || (S.tab === "invest" && S.invView.tab === "market");
+  $("#fab").hidden = false;
   $$("nav .tab").forEach(b => b.setAttribute("aria-current", b.dataset.tab === S.tab ? "page" : "false"));
   const seq = ++renderSeq;
   let html = viewHtml();
@@ -216,6 +216,7 @@ document.addEventListener("click", async e => {
     case "notifyOff": enableNotifications(false); break;
     case "exportYear": exportYear(); break;
     case "runOnboard": startOnboarding(); render(); window.scrollTo(0, 0); break;
+    case "runTour": startTour(); break;
     case "obSkip": obFinish(); break;
     case "obNext2": S.ob.step = 3; render(); window.scrollTo(0, 0); break;
     case "obNext3": S.ob.step = 4; render(); window.scrollTo(0, 0); break;
@@ -359,24 +360,70 @@ document.addEventListener("change", async e => {
   if (el.id === "mPick" && el.value) { const v = el.value > ymOf(todayISO()) ? ymOf(todayISO()) : el.value; if (v !== S.ym) { S.ym = v; resetAI(); render(); } return; }
   if (el.id === "fAcc") { S.filter.acc = el.value; $("#listBody").innerHTML = listBody(); return; }
 });
-/* Mėnesio keitimas perbraukiant */
+/* Perbraukimas: turinyje keičia skiltis, ant mėnesio juostos keičia mėnesį */
+const TAB_ORDER = ["overview", "list", "invest", "more"];
 let swipe = null;
+function hScrollable(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    if (n.scrollWidth > n.clientWidth + 2) { const ox = getComputedStyle(n).overflowX; if (ox === "auto" || ox === "scroll") return true; }
+  }
+  return false;
+}
 document.addEventListener("touchstart", e => {
-  if (e.touches.length !== 1 || !$("#view").contains(e.target) || e.target.closest(".prev,.chart,input,select,textarea,.filters,details")) { swipe = null; return; }
-  if (!(S.tab === "overview" || S.tab === "list")) { swipe = null; return; }
-  swipe = {x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now()};
+  swipe = null;
+  if (e.touches.length !== 1 || !S.user || tourActive()) return;
+  const t = e.target;
+  if (t.closest("#sheetRoot,#tourRoot,#tabs,input,select,textarea,.chart,[data-noswipe]") || hScrollable(t)) return;
+  const mode = t.closest("#monthBox") ? "month" : $("#appScreen").contains(t) ? "tab" : null;
+  if (mode) swipe = {mode, x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now()};
 }, {passive: true});
 document.addEventListener("touchend", e => {
   if (!swipe) return;
-  const dx = e.changedTouches[0].clientX - swipe.x, dy = e.changedTouches[0].clientY - swipe.y;
-  const ok = Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy) && Date.now() - swipe.t < 600;
-  swipe = null; if (!ok) return;
-  const next = dx < 0 ? addMonths(S.ym, 1) : addMonths(S.ym, -1);
-  if (next > ymOf(todayISO())) return;
-  S.ym = next; resetAI();
-  const v = $("#view"); v.classList.remove("slide-l", "slide-r"); void v.offsetWidth; v.classList.add(dx < 0 ? "slide-l" : "slide-r");
-  render();
+  const sw = swipe; swipe = null;
+  const dx = e.changedTouches[0].clientX - sw.x, dy = e.changedTouches[0].clientY - sw.y;
+  if (!(Math.abs(dx) > 60 && Math.abs(dx) > 1.8 * Math.abs(dy) && Date.now() - sw.t < 700)) return;
+  const v = $("#view"), anim = cls => { v.classList.remove("slide-l", "slide-r"); void v.offsetWidth; v.classList.add(cls); };
+  if (sw.mode === "month") {
+    const next = dx < 0 ? addMonths(S.ym, 1) : addMonths(S.ym, -1);
+    if (next > ymOf(todayISO())) return;
+    S.ym = next; resetAI(); anim(dx < 0 ? "slide-l" : "slide-r"); render(); return;
+  }
+  if (S.sub) {
+    if (dx < 0 || S.sub === "onboard" || S.sub === "recreview") return;
+    if (S.tab === "invest" && S.sub === "chart") S.invView.tab = S.mkt.from === "portfolio" ? "portfolio" : "market";
+    if (S.sub === "help" && S.help?.lesson) { S.help.lesson = null; anim("slide-r"); render(); window.scrollTo(0, 0); return; }
+    S.sub = null; S.confirm = null; anim("slide-r"); render(); window.scrollTo(0, 0); return;
+  }
+  const i = TAB_ORDER.indexOf(S.tab), j = i + (dx < 0 ? 1 : -1);
+  if (i < 0 || j < 0 || j >= TAB_ORDER.length) return;
+  if (TAB_ORDER[j] === "list") S.filter.cat = null;
+  anim(dx < 0 ? "slide-l" : "slide-r"); go(TAB_ORDER[j]);
 }, {passive: true});
+/* Be priartinimo ir be teksto kopijavimo */
+const editable = el => !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
+["gesturestart", "gesturechange", "gestureend"].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), {passive: false}));
+document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, {passive: false});
+["copy", "cut"].forEach(ev => document.addEventListener(ev, e => { if (!editable(document.activeElement)) e.preventDefault(); }));
+document.addEventListener("contextmenu", e => { if (!editable(e.target)) e.preventDefault(); });
+document.addEventListener("selectstart", e => { if (!editable(e.target)) e.preventDefault(); });
+document.addEventListener("dragstart", e => e.preventDefault());
+
+/* Įkrovimo ekranas */
+let splashAt = performance.now(), hiddenAt = 0;
+function splashGone() { const el = $("#splash"); return !el || el.hidden || el.classList.contains("gone"); }
+function hideSplash() {
+  const el = $("#splash"); if (!el || el.classList.contains("gone")) return;
+  setTimeout(() => {
+    el.classList.add("gone");
+    setTimeout(() => { if (el.classList.contains("gone")) el.hidden = true; if (typeof maybeTour === "function") maybeTour(); }, 380);
+  }, Math.max(0, 1200 - (performance.now() - splashAt)));
+}
+function showSplash() { const el = $("#splash"); if (!el) return; el.hidden = false; el.classList.remove("gone"); splashAt = performance.now(); }
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+  if (hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000) { showSplash(); hideSplash(); }
+  hiddenAt = 0;
+});
 document.addEventListener("keydown", e => {
   if (e.target.id === "chatIn" && e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#chatForm")?.requestSubmit(); }
 });
@@ -406,8 +453,11 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
 render();
+setTimeout(hideSplash, 4000);
+if (!sb) hideSplash();
 if (sb) {
   sb.auth.onAuthStateChange((event, session) => {
+    if (event === "INITIAL_SESSION") setTimeout(hideSplash, 0);
     if (event === "PASSWORD_RECOVERY") { S.recovery = true; S.authErr = ""; render(); return; }
     if (session && session.user) setTimeout(() => startSession(session.user), 0);
     else if (event === "SIGNED_OUT") { S.user = null; render(); }

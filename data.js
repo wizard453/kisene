@@ -140,7 +140,7 @@ async function flush() {
         if (permanent) {
           console.warn("Atmestas pakeitimas", op, error);
           S.outbox.splice(0, n); saveCache();
-          toast(/does not exist|column/i.test(error.message || "") ? "Duomenų bazė pasenusi: paleisk naują schema.sql" : "Vienas pakeitimas atmestas serverio");
+          toast("Vieno pakeitimo išsaugoti nepavyko");
           continue;
         }
         if (st === 401) await sb.auth.refreshSession().catch(() => {});
@@ -179,7 +179,7 @@ async function fetchAll() {
   } catch (e) {
     console.warn(e);
     setSync("err");
-    if (/does not exist|column/i.test(e.message || "")) toast("Duomenų bazė pasenusi: paleisk naują schema.sql");
+    if (/does not exist|column/i.test(e.message || "")) toast("Duomenų įkelti nepavyko");
     return;
   }
   const apply = (table, rows, norm) => {
@@ -204,6 +204,7 @@ async function fetchAll() {
   await generateRecurring();
   render(true);
   if (typeof maybeOnboard === "function") maybeOnboard();
+  if (typeof maybeTour === "function") maybeTour();
   flush();
 }
 

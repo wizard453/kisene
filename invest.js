@@ -8,7 +8,7 @@ const assetMeta = key => (S.cfg.assets || {})[key] || {};
 
 /* ---------- Serverio funkcijos ---------- */
 async function callFunction(name, body) {
-  if (!sb) throw {message: "Programėlė nesujungta su serveriu"};
+  if (!sb) throw {message: "Ši funkcija šiuo metu nepasiekiama"};
   if (!navigator.onLine) throw {message: "Nėra interneto ryšio"};
   const {data} = await sb.auth.getSession();
   const token = data.session && data.session.access_token;
@@ -17,9 +17,9 @@ async function callFunction(name, body) {
     method: "POST", headers: {"Content-Type": "application/json", Authorization: "Bearer " + token, apikey: CFG.SUPABASE_ANON_KEY}, body: JSON.stringify(body)
   });
   if (!res.ok) {
-    let msg = `Serverio klaida (${res.status})`;
+    let msg = `Duomenų gauti nepavyko (klaida ${res.status})`;
     try { const j = await res.json(); if (j.error) msg = j.error; } catch (e) {}
-    if (res.status === 404) msg = `Serverio funkcija „${name}“ dar neįdiegta`;
+    if (res.status === 404) msg = `Ši funkcija dar neįjungta (${name}, 404)`;
     throw {message: msg, status: res.status};
   }
   return res.json();

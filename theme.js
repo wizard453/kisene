@@ -94,6 +94,8 @@ function moreItems() {
       ["import", "Banko išrašo importas", "CSV iš bet kurio banko", "arrowin", "c10"],
       ["review", "Be kategorijos", rv ? `${rv} laukia` : "Viskas sutvarkyta", "tag", "c4", rv],
       ["cats", "Kategorijos ir taisyklės", `${nRules} taisyklės`, "dots", "c8"]]},
+    {group: "Pagalba", items: [
+      ["help", "Pagalba ir pamokos", "Kaip kas veikia, biudžeto metodai", "book", "c3"]]},
     {group: "Nustatymai", items: [
       ["look", "Išvaizda", "Spalvos, tema, išdėstymas", "palette", "c12"],
       ["app", "Paskyra ir programėlė", S.user?.email || "", "user", "c9"]]}

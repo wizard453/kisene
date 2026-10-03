@@ -88,4 +88,5 @@ function obSaveStep1() {
 function obFinish() {
   S.cfg.prefs = {...(S.cfg.prefs || {}), onboarded: true}; saveSettings("prefs");
   S.ob = null; go("overview");
+  if (typeof maybeTour === "function") setTimeout(maybeTour, 400);
 }
