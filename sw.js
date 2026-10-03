@@ -1,31 +1,31 @@
 // Kišenė: service worker. Leidžia programėlei atsidaryti ir be interneto.
 // Pakeitus programėlės failus, padidink VERSION, kad telefonai gautų naują versiją.
-const VERSION = "kisene-v7";
+const VERSION = "kisene-v8";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./js/util.js",
-  "./js/data.js",
-  "./js/budget.js",
-  "./js/importer.js",
-  "./js/invest.js",
-  "./js/market.js",
-  "./js/wealth.js",
-  "./js/report.js",
-  "./js/onboard.js",
-  "./js/notify.js",
-  "./js/edit.js",
-  "./js/recurring.js",
-  "./js/theme.js",
-  "./js/ai.js",
-  "./js/main.js",
+  "./util.js",
+  "./data.js",
+  "./budget.js",
+  "./importer.js",
+  "./invest.js",
+  "./market.js",
+  "./wealth.js",
+  "./report.js",
+  "./onboard.js",
+  "./notify.js",
+  "./edit.js",
+  "./recurring.js",
+  "./theme.js",
+  "./ai.js",
+  "./main.js",
   "./config.js",
-  "./vendor/supabase.js",
+  "./supabase.js",
   "./manifest.webmanifest",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/apple-touch-icon.png"
+  "./icon-192.png",
+  "./icon-512.png",
+  "./apple-touch-icon.png"
 ];
 const FONT_CACHE = "kisene-fonts";
 

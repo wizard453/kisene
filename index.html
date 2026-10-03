@@ -12,8 +12,8 @@
 <meta name="apple-mobile-web-app-title" content="Kišenė">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
@@ -53,21 +53,37 @@
 <div id="toastRoot"></div>
 
 <script src="config.js"></script>
-<script src="vendor/supabase.js"></script>
-<script src="js/util.js"></script>
-<script src="js/data.js"></script>
-<script src="js/budget.js"></script>
-<script src="js/importer.js"></script>
-<script src="js/invest.js"></script>
-<script src="js/market.js"></script>
-<script src="js/wealth.js"></script>
-<script src="js/report.js"></script>
-<script src="js/onboard.js"></script>
-<script src="js/notify.js"></script>
-<script src="js/edit.js"></script>
-<script src="js/recurring.js"></script>
-<script src="js/theme.js"></script>
-<script src="js/ai.js"></script>
-<script src="js/main.js"></script>
+<script src="supabase.js"></script>
+<script src="util.js"></script>
+<script src="data.js"></script>
+<script src="budget.js"></script>
+<script src="importer.js"></script>
+<script src="invest.js"></script>
+<script src="market.js"></script>
+<script src="wealth.js"></script>
+<script src="report.js"></script>
+<script src="onboard.js"></script>
+<script src="notify.js"></script>
+<script src="edit.js"></script>
+<script src="recurring.js"></script>
+<script src="theme.js"></script>
+<script src="ai.js"></script>
+<script src="main.js"></script>
+<script>
+// Jei kuris nors programėlės failas neįsikėlė, parodom aiškią žinutę vietoj tuščio ekrano
+window.addEventListener("load", function () {
+  var need = ["KISENE_CONFIG", "supabase", "render", "vAuth", "vOverview", "applyTheme", "sendChat", "vRecReview"];
+  var missing = need.filter(function (n) { return typeof window[n] === "undefined"; });
+  var shown = !document.getElementById("authScreen").hidden || !document.getElementById("appScreen").hidden;
+  if (!missing.length && shown) return;
+  var files = {KISENE_CONFIG: "config.js", supabase: "supabase.js", render: "main.js", vAuth: "main.js", vOverview: "budget.js", applyTheme: "theme.js", sendChat: "ai.js", vRecReview: "recurring.js"};
+  var list = missing.map(function (n) { return files[n]; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+  var box = document.createElement("div");
+  box.style.cssText = "max-width:480px;margin:40px auto;padding:20px;font:15px/1.5 system-ui,sans-serif;background:#fff;color:#111;border-radius:14px;border:2px solid #d03b3b";
+  box.innerHTML = "<b>Programėlė neįsikėlė.</b><br>" + (list.length ? "Nerasti failai: <code>" + list.join("</code>, <code>") + "</code>.<br>" : "") +
+    "Patikrink, ar visi programėlės failai (<code>.js</code>, <code>.png</code>, <code>styles.css</code>) įkelti į GitHub repozitorijos šaknį šalia <code>index.html</code>. Jei neseniai atnaujinai, perkrauk puslapį.";
+  document.body.appendChild(box);
+});
+</script>
 </body>
 </html>

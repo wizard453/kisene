@@ -1,7 +1,9 @@
 /* Kišenė: duomenys, sinchronizacija su Supabase ir darbas be interneto. */
 "use strict";
 
-const CFG = window.KISENE_CONFIG || {};
+const CFG = {...(window.KISENE_CONFIG || {})};
+// jei įklijuotas adresas su /rest/v1/ gale, jį nukerpam
+if (CFG.SUPABASE_URL) CFG.SUPABASE_URL = String(CFG.SUPABASE_URL).trim().replace(/\/(rest|auth|functions)\/v1\/?.*$/, "").replace(/\/+$/, "");
 const CONFIGURED = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && !/XXXX/.test(CFG.SUPABASE_URL) && !/IKLIJUOK/.test(CFG.SUPABASE_ANON_KEY));
 const sb = CONFIGURED && window.supabase ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
   auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: true}

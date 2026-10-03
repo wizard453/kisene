@@ -63,7 +63,7 @@ function checkAlerts() {
   }
 }
 async function showSystemNotification(x) {
-  const opts = {body: x.body, tag: x.key, icon: "icons/icon-192.png", badge: "icons/icon-192.png", data: {go: x.go}};
+  const opts = {body: x.body, tag: x.key, icon: "icon-192.png", badge: "icon-192.png", data: {go: x.go}};
   try {
     const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
     if (reg) { await reg.showNotification(x.title, opts); return; }
