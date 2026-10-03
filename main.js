@@ -76,8 +76,9 @@ function maybeOnboard() {
 const NAV_TRANSIENT = ["onboard", "recreview"];
 let navCur = null, navStack = [], navRestoring = false, navIgnorePop = 0;
 function navSnap() {
-  return {tab: S.tab, sub: S.sub || null, inv: S.invView?.tab || null, lesson: S.help?.lesson || null, cat: S.filter.cat || null, year: S.filter.year || null,
-    imp: S.filter.imp || null, sym: S.sub === "chart" ? S.mkt?.sym || null : null, scroll: 0};
+  const L = S.tab === "list";
+  return {tab: S.tab, sub: S.sub || null, inv: S.invView?.tab || null, lesson: S.help?.lesson || null, cat: L && S.filter.cat || null, year: L && S.filter.year || null,
+    imp: L && S.filter.imp || null, sym: S.sub === "chart" ? S.mkt?.sym || null : null, scroll: 0};
 }
 const navKey = n => n ? JSON.stringify({...n, scroll: 0, inv: n.tab === "invest" ? n.inv : null, sym: n.sym?.symbol || null}) : "";
 function navTrack() {
@@ -246,6 +247,8 @@ function exportInv() {
 /* ---------- Įvykiai ---------- */
 function go(tab, sub) {
   S.tab = tab; S.sub = sub || null; S.confirm = null;
+  // kategorijos ar failo filtras galioja tik operacijų sąraše
+  if (tab !== "list") S.filter = {...S.filter, cat: null, imp: null, year: null};
   if ((tab === "invest" && !sub) || sub === "wealth") refreshMarket();
   render(); window.scrollTo(0, 0);
 }
@@ -253,7 +256,7 @@ document.addEventListener("click", async e => {
   const t = e.target.closest("button,[data-edit],[data-goal],[data-catfilter]"); if (!t || t.closest("#sheetRoot") || t.closest("#toastRoot")) return;
   const d = t.dataset;
   if (d.am) { S.authMode = d.am; S.authErr = ""; S.authMsg = ""; render(); return; }
-  if (d.tab) { if (d.tab === "list") { S.filter.cat = null; S.filter.imp = null; } go(d.tab); return; }
+  if (d.tab) { S.filter = {...S.filter, cat: null, imp: null, year: null}; go(d.tab); return; }
   if (d.catfilter) { S.filter = {...S.filter, cat: d.catfilter, q: "", year: d.catyear || null}; go("list"); return; }
   if (d.clearimp) { S.filter.imp = null; render(); return; }
   if (d.clearcat) { S.filter.cat = null; S.filter.year = null; render(); return; }
@@ -497,7 +500,7 @@ document.addEventListener("touchend", e => {
     if (next > ymOf(todayISO())) return;
     S.ym = next; resetAI(); anim(dx < 0 ? "slide-l" : "slide-r"); render(); return;
   }
-  const top = !S.sub && !S.filter.imp && !S.filter.cat;
+  const top = !S.sub && !(S.tab === "list" && (S.filter.imp || S.filter.cat));
   // giliau esančiame lange: į dešinę grįžta atgal, į kairę nieko nedaro
   if (!top) { if (dx > 0 && !NAV_TRANSIENT.includes(S.sub)) { anim("slide-r"); navBack(); } return; }
   // pagrindiniuose 4 languose: pereina į gretimą langą
