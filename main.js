@@ -404,7 +404,18 @@ document.addEventListener("touchend", e => {
 /* Be priartinimo ir be teksto kopijavimo */
 const editable = el => !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
 ["gesturestart", "gesturechange", "gestureend"].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), {passive: false}));
-document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, {passive: false});
+// Be „patempk žemyn, kad perkrautum“: ekrano viršuje traukiant žemyn puslapis nebeperkraunamas
+let pullY = null;
+let pullX = 0;
+document.addEventListener("touchstart", e => { pullY = e.touches.length === 1 ? e.touches[0].clientY : null; pullX = e.touches[0]?.clientX || 0; }, {passive: true});
+document.addEventListener("touchmove", e => {
+  if (e.touches.length > 1) { e.preventDefault(); return; }
+  const dy = e.touches[0].clientY - pullY, dx = Math.abs(e.touches[0].clientX - pullX);
+  if (pullY == null || window.scrollY > 0 || dy <= 0 || dx > dy) return;
+  // leidžiam slinkti vidiniams sąrašams (pvz. lapams), jei jie dar ne viršuje
+  for (let n = e.target; n && n !== document.body; n = n.parentElement) if (n.scrollTop > 0) return;
+  if (e.cancelable) e.preventDefault();
+}, {passive: false});
 ["copy", "cut"].forEach(ev => document.addEventListener(ev, e => { if (!editable(document.activeElement)) e.preventDefault(); }));
 document.addEventListener("contextmenu", e => { if (!editable(e.target)) e.preventDefault(); });
 document.addEventListener("selectstart", e => { if (!editable(e.target)) e.preventDefault(); });

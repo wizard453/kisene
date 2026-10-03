@@ -21,8 +21,10 @@ const THEME_KEY = "kisene.theme";
 
 function themePrefs() {
   const p = S?.cfg?.prefs?.theme;
-  if (p) return p;
-  try { return JSON.parse(localStorage.getItem(THEME_KEY) || "null") || {}; } catch (e) { return {}; }
+  // senas numatytasis fonas „Šalavijas“ pakeičiamas nauju „Kišenė“
+  const mig = o => o && o.bg === "sage" ? {...o, bg: "brand"} : o;
+  if (p) return mig(p);
+  try { return mig(JSON.parse(localStorage.getItem(THEME_KEY) || "null")) || {}; } catch (e) { return {}; }
 }
 function mix(hex, other, t) {
   const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));

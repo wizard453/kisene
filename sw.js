@@ -1,6 +1,6 @@
 // Kišenė: service worker. Leidžia programėlei atsidaryti ir be interneto.
 // Pakeitus programėlės failus, padidink VERSION, kad telefonai gautų naują versiją.
-const VERSION = "kisene-v14";
+const VERSION = "kisene-v16";
 const SHELL = [
   "./",
   "./index.html",
@@ -31,7 +31,8 @@ const SHELL = [
 const FONT_CACHE = "kisene-fonts";
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: "reload" – imam failus tiesiai iš serverio, ne iš naršyklės talpyklos
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (e) => {
@@ -66,7 +67,8 @@ self.addEventListener("fetch", (e) => {
 
   // Pirma tinklas (kad atnaujinimai pasiektų greitai), be ryšio iš talpyklos
   e.respondWith(
-    fetch(req)
+    // cache: "no-cache" – naršyklė visada pasitikrina serveryje, ar failas nepasikeitė (GitHub Pages kitaip laiko senus failus iki 10 min.)
+    fetch(req.url, { cache: "no-cache", credentials: "same-origin" })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();
@@ -74,7 +76,7 @@ self.addEventListener("fetch", (e) => {
         }
         return res;
       })
-      .catch(async () => (await caches.match(req)) || (req.mode === "navigate" ? caches.match("./index.html") : Response.error()))
+      .catch(async () => (await caches.match(req, { ignoreSearch: true })) || (req.mode === "navigate" ? caches.match("./index.html") : Response.error()))
   );
 });
 
