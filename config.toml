@@ -1,0 +1,10 @@
+# Naudojama tik diegiant per Supabase CLI.
+# Funkcijos pačios tikrina prisijungusį vartotoją, todėl platformos JWT tikrinimas išjungtas.
+[functions.ai-advisor]
+verify_jwt = false
+
+[functions.market-data]
+verify_jwt = false
+
+[functions.broker-sync]
+verify_jwt = false

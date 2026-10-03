@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kišenė</title>
+<meta name="description" content="Asmeninių pajamų, išlaidų ir investicijų sekimas su grafikais, biudžetais ir AI patarėju.">
+<meta name="theme-color" content="#F1F3EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111513" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kišenė">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Prisijungimo ekranas (rodomas, kol vartotojas neprisijungęs) -->
+<div class="auth" id="authScreen" hidden></div>
+
+<!-- Pagrindinė programėlė -->
+<div class="app" id="appScreen" hidden>
+  <header class="top" id="top">
+    <div class="brand">Kišenė<small id="syncNote" class="sync off"><i></i><span>Jungiamasi…</span></small></div>
+    <span class="page-title" id="pageTitle"></span>
+    <div class="month" id="monthBox">
+      <button id="mPrev" aria-label="Ankstesnis mėnuo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <label class="mlabel"><span id="mLabel">…</span><input type="month" id="mPick" aria-label="Pasirinkti mėnesį"></label>
+      <button id="mNext" aria-label="Kitas mėnuo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <button class="bell" id="bellBtn" aria-label="Pranešimai"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span id="bellBadge" hidden></span></button>
+  </header>
+  <main id="view"></main>
+</div>
+
+<nav class="tabs" id="tabs" aria-label="Skiltys" hidden>
+  <div class="in">
+    <button class="tab" data-tab="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/></svg>Apžvalga</button>
+    <button class="tab" data-tab="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Operacijos</button>
+    <button class="fab" id="fab" aria-label="Pridėti operaciją"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="tab" data-tab="invest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M5 15l4-5 4 3 6-7"/><path d="M15 6h4v4"/></svg>Investicijos</button>
+    <button class="tab" data-tab="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Daugiau</button>
+  </div>
+</nav>
+
+<div id="sheetRoot"></div>
+<div id="toastRoot"></div>
+
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/budget.js"></script>
+<script src="js/importer.js"></script>
+<script src="js/invest.js"></script>
+<script src="js/market.js"></script>
+<script src="js/wealth.js"></script>
+<script src="js/report.js"></script>
+<script src="js/onboard.js"></script>
+<script src="js/notify.js"></script>
+<script src="js/edit.js"></script>
+<script src="js/recurring.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
