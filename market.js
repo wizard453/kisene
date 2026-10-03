@@ -76,8 +76,7 @@ function vMarket() {
   <form id="mktForm" class="mktsearch"><input class="search" id="mktQ" type="search" placeholder="Ieškok akcijų, ETF, kriptovaliutų, pvz. Tesla, VWCE, BTC" value="${esc(S.mkt.q)}" autocomplete="off" enterkeyhint="search"></form>
   <div id="mktResults"></div>
   ${w.length ? `<section class="card"><div class="sec-h"><h2>Stebimi</h2><span class="aside">${w.length}</span></div><div class="txs">${w.map(quoteRow).join("")}</div></section>` : ""}
-  <section class="card"><div class="sec-h"><h2>Populiarūs</h2></div><div class="txs">${QUICK_PICKS.filter(q => !inWatch(q.symbol)).map(quoteRow).join("")}</div></section>
-  <div class="fine">Kainos iš Yahoo Finance, gali vėluoti iki 15–20 min. Tai ne investavimo rekomendacijos.</div>`;
+  <section class="card"><div class="sec-h"><h2>Populiarūs</h2></div><div class="txs">${QUICK_PICKS.filter(q => !inWatch(q.symbol)).map(quoteRow).join("")}</div></section>`;
 }
 
 /* ---------- Simbolio grafikas ---------- */
@@ -158,8 +157,7 @@ function vChart() {
     ${pts.length > 1 ? `<span>Laikotarpio min / max</span><b class="num">${priceFmt(Math.min(...pts.map(p => p[1])), data.currency)} – ${priceFmt(Math.max(...pts.map(p => p[1])), data.currency)}</b>` : ""}
     <span>Valiuta</span><b>${esc(data.currency || "—")}</b></div>` : ""}
   ${pos ? `<section class="card"><div class="sec-h"><h2>Mano pozicija</h2></div><div class="kv"><span>Kiekis</span><b class="num">${fmtN.format(r4(pos.qty))}</b><span>Vertė</span><b class="num">${eur(pos.value)}</b><span>Vidutinė kaina</span><b class="num">${eur(pos.cost / pos.qty)}</b><span>Nerealizuotas</span><b class="num ${plClass(pos.unreal)}">${signed(pos.unreal)}</b></div></section>` : ""}
-  <div class="row"><button class="btn" id="chartAddInv" style="flex:1">Įrašyti pirkimą ar pardavimą</button></div>
-  <div class="fine">Kainos iš Yahoo Finance, gali vėluoti. Tai ne investavimo rekomendacija.</div>`;
+  <div class="row"><button class="btn" id="chartAddInv" style="flex:1">Įrašyti pirkimą ar pardavimą</button></div>`;
 }
 
 /* ---------- Investavimo platformų prijungimas ---------- */

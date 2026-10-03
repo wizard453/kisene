@@ -236,7 +236,7 @@ select.chip{appearance:auto;padding:6px 10px}
 /* 3 versija: greitas įvedimas, ikonos, apžvalga */
 .dot svg{display:block}
 .tx .dot{color:#fff}
-.mlabel{position:relative;display:block;cursor:pointer}
+.mlabel{position:relative;display:block;cursor:pointer;border:0;background:none;padding:6px 4px;border-radius:999px;color:inherit}
 .mlabel span{display:block;min-width:112px;text-align:center;font-weight:600;font-size:14px}
 .mlabel input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0;padding:0}
 .hero{background:var(--accent);color:var(--accent-ink);border-radius:20px;padding:18px 18px 14px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow)}
@@ -563,3 +563,21 @@ img,svg{-webkit-user-drag:none}
 .hero:not(.neg) .eq-row{border-bottom-color:rgba(234,246,239,.14)}
 #splash .splash-name{text-shadow:0 2px 10px rgba(0,0,0,.25)}
 .sheet,.chat,.prev{overscroll-behavior:contain}
+/* Mėnesio pasirinkimo langas */
+.mlabel:active{background:var(--accent-soft)}
+.my-head{display:flex;align-items:center;justify-content:space-between}
+.my-head .sheet-h{margin:0;font-size:22px}
+.my-nav{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:22px;line-height:1;color:var(--ink)}
+.my-nav:disabled{opacity:.3}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mcell{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink);position:relative}
+.mcell b{font-size:15px;font-weight:600}
+.mcell small{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.mcell.has::after{content:"";position:absolute;top:8px;right:9px;width:6px;height:6px;border-radius:50%;background:var(--accent-2)}
+.mcell.now{border-color:var(--accent)}
+.mcell.sel{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.mcell.sel small{color:inherit;opacity:.8}
+.mcell.sel::after{background:var(--gold)}
+.mcell:disabled{opacity:.35}
+.msheet-foot{justify-content:flex-end}
+.month button.mlabel{width:auto;height:auto;border-radius:999px;padding:6px 4px;color:var(--ink);display:block}

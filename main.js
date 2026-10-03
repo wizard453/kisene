@@ -99,7 +99,6 @@ async function render(fromData) {
   const monthly = S.tab === "overview" || S.tab === "list";
   $("#monthBox").hidden = !monthly;
   $("#mLabel").textContent = ymLabel(S.ym);
-  $("#mPick").value = S.ym; $("#mPick").max = ymOf(todayISO());
   $("#mNext").disabled = S.ym >= ymOf(todayISO());
   $("#pageTitle").textContent = monthly || S.tab === "more" ? "" : S.tab === "invest" ? "Investicijos" : "";
   $("#fab").hidden = false;
@@ -117,6 +116,43 @@ async function render(fromData) {
   if (S.tab === "more" && S.sub === "year") { const yc = $("#yearChart"); if (yc) mountBars("#yearChart", yc.dataset.months.split(",")); }
   checkAlerts();
   renderSync();
+}
+
+/* ---------- Mėnesio pasirinkimas ---------- */
+function openMonthSheet() {
+  const now = ymOf(todayISO()), curY = +now.slice(0, 4);
+  // kiekvieno mėnesio išlaidos, kad būtų matyti, kur yra duomenų
+  const spent = {};
+  for (const t of allTx()) if (t.type === "exp") { const m = ymOf(t.date); spent[m] = (spent[m] || 0) + t.amount; }
+  const has = {}; for (const t of allTx()) has[ymOf(t.date)] = true;
+  const years = Object.keys(has).map(m => +m.slice(0, 4));
+  const minY = Math.min(curY - 1, ...years);
+  let year = +S.ym.slice(0, 4);
+  const root = $("#sheetRoot"); const close = () => { root.innerHTML = ""; };
+  const draw = () => {
+    const cells = MONTHS.map((n, i) => {
+      const ym = year + "-" + String(i + 1).padStart(2, "0"), fut = ym > now, sel = ym === S.ym;
+      return `<button type="button" class="mcell${sel ? " sel" : ""}${ym === now ? " now" : ""}${has[ym] ? " has" : ""}" data-pickym="${ym}" ${fut ? "disabled" : ""}>
+        <b>${MSHORT[i]}</b><small class="num">${spent[ym] ? "−" + eur0(spent[ym]) : fut ? "" : "—"}</small></button>`;
+    }).join("");
+    root.innerHTML = `<div class="sheet-bg" id="sheetBg"><div class="sheet msheet" role="dialog" aria-modal="true" aria-label="Pasirinkti mėnesį">
+      <div class="grab"></div>
+      <div class="my-head"><button type="button" class="my-nav" data-yr="-1" ${year <= minY ? "disabled" : ""} aria-label="Ankstesni metai">‹</button>
+        <h3 class="sheet-h">${year}</h3>
+        <button type="button" class="my-nav" data-yr="1" ${year >= curY ? "disabled" : ""} aria-label="Kiti metai">›</button></div>
+      <div class="mgrid">${cells}</div>
+      <div class="row msheet-foot">${S.ym !== now ? `<button type="button" class="btn ghost small" data-pickym="${now}">Šis mėnuo</button>` : ""}<button type="button" class="btn small" id="mClose">Uždaryti</button></div>
+    </div></div>`;
+  };
+  draw();
+  root.onclick = e => {
+    if (e.target.id === "sheetBg" || e.target.id === "mClose") { close(); root.onclick = null; return; }
+    const y = e.target.closest("[data-yr]"); if (y && !y.disabled) { year += +y.dataset.yr; draw(); return; }
+    const m = e.target.closest("[data-pickym]"); if (m && !m.disabled) {
+      const v = m.dataset.pickym; close(); root.onclick = null;
+      if (v !== S.ym) { const v0 = S.ym; S.ym = v; resetAI(); const vw = $("#view"); vw.classList.remove("slide-l", "slide-r"); void vw.offsetWidth; vw.classList.add(v > v0 ? "slide-l" : "slide-r"); render(); }
+    }
+  };
 }
 
 /* ---------- Eksportas ---------- */
@@ -199,6 +235,7 @@ document.addEventListener("click", async e => {
   if (d.goalsub) { const f = t.closest("form"); goalAdd(d.goalsub, -(parseNum(f.amt.value) || 0)); return; }
   switch (t.id) {
     case "fab": if (S.tab === "invest") openInvSheet(null); else openTxSheet(null); break;
+    case "mOpen": openMonthSheet(); break;
     case "mPrev": S.ym = addMonths(S.ym, -1); resetAI(); render(); break;
     case "mNext": if (S.ym < ymOf(todayISO())) { S.ym = addMonths(S.ym, 1); resetAI(); render(); } break;
     case "hideDemo": S.demoDismissed = true; refreshDemo(); saveSettings("demo_dismissed"); render(); break;
@@ -359,7 +396,6 @@ document.addEventListener("change", async e => {
   }
   if (el.dataset.choice && S.imp) { bankOverride(el.dataset.choice, el.value); render(); return; }
   if (el.dataset.reviewsel && el.value) { applyReview(el.dataset.reviewsel, el.value); return; }
-  if (el.id === "mPick" && el.value) { const v = el.value > ymOf(todayISO()) ? ymOf(todayISO()) : el.value; if (v !== S.ym) { S.ym = v; resetAI(); render(); } return; }
   if (el.id === "fAcc") { S.filter.acc = el.value; $("#listBody").innerHTML = listBody(); return; }
 });
 /* Perbraukimas: turinyje keičia skiltis, ant mėnesio juostos keičia mėnesį */
