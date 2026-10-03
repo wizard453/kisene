@@ -178,8 +178,16 @@ function vOverview() {
   return `
   ${S.demo ? `<div class="banner"><span>Rodomi <b>pavyzdiniai duomenys</b>. Pridėk pirmą operaciją arba importuok banko išrašą, ir jie išnyks.</span><button class="linkbtn" id="hideDemo">Slėpti</button></div>` : ""}
   ${!S.loaded ? `<div class="banner"><span>Įkeliami duomenys…</span></div>` : ""}
+  ${emptyMonthHint(a)}
   ${body}
   <button class="linkbtn custom-link" data-go="more" data-sub="look">Tvarkyti apžvalgą</button>`;
+}
+function emptyMonthHint(a) {
+  if (S.demo || a.n || !S.txs.size) return "";
+  let last = "";
+  for (const t of S.txs.values()) { const m = ymOf(t.date); if (m < S.ym && m > last) last = m; }
+  if (!last) return "";
+  return `<div class="banner"><span>${esc(ymLabel(S.ym))}: operacijų dar nėra. Naujausi duomenys: ${esc(ymLabel(last))}.</span><button class="linkbtn" data-gomonth="${last}">Rodyti</button></div>`;
 }
 function ovHero(a, txs) {
   const isNow = S.ym === ymOf(todayISO());

@@ -154,6 +154,7 @@ document.addEventListener("click", async e => {
   if (d.catfilter) { S.filter = {...S.filter, cat: d.catfilter, q: "", year: d.catyear || null}; go("list"); return; }
   if (d.clearcat) { S.filter.cat = null; S.filter.year = null; render(); return; }
   if (d.year) { S.year = d.year; render(); return; }
+  if (d.gomonth) { S.ym = d.gomonth; resetAI(); render(); window.scrollTo(0, 0); return; }
   if (d.review && d.rcat) { applyReview(d.review, d.rcat); return; }
   if (d.keepother) { S.cfg.prefs = {...(S.cfg.prefs || {}), keepOther: [...(S.cfg.prefs?.keepOther || []), d.keepother]}; saveSettings("prefs"); render(); return; }
   if (d.cycleicon) { ensureCfg("categories"); S.cfg.categories = S.cfg.categories.map(c => { if (c.id !== d.cycleicon) return c; const cur = c.icon || CAT_ICONS[c.id] || "tag"; return {...c, icon: ICON_CHOICES[(ICON_CHOICES.indexOf(cur) + 1) % ICON_CHOICES.length]}; }); saveSettings("categories"); render(); return; }
@@ -416,7 +417,7 @@ function hideSplash() {
   setTimeout(() => {
     el.classList.add("gone");
     setTimeout(() => { if (el.classList.contains("gone")) el.hidden = true; if (typeof maybeTour === "function") maybeTour(); }, 380);
-  }, Math.max(0, 1200 - (performance.now() - splashAt)));
+  }, Math.max(0, 3000 - (performance.now() - splashAt)));
 }
 function showSplash() { const el = $("#splash"); if (!el) return; el.hidden = false; el.classList.remove("gone"); splashAt = performance.now(); }
 document.addEventListener("visibilitychange", () => {
@@ -463,7 +464,7 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
   });
 }
 render();
-setTimeout(hideSplash, 4000);
+setTimeout(hideSplash, 5000);
 if (!sb) hideSplash();
 if (sb) {
   sb.auth.onAuthStateChange((event, session) => {

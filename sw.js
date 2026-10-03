@@ -1,6 +1,6 @@
 // Kišenė: service worker. Leidžia programėlei atsidaryti ir be interneto.
 // Pakeitus programėlės failus, padidink VERSION, kad telefonai gautų naują versiją.
-const VERSION = "kisene-v10";
+const VERSION = "kisene-v11";
 const SHELL = [
   "./",
   "./index.html",
