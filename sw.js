@@ -1,6 +1,6 @@
 // Kišenė: service worker. Leidžia programėlei atsidaryti ir be interneto.
 // Pakeitus programėlės failus, padidink VERSION, kad telefonai gautų naują versiją.
-const VERSION = "kisene-v17";
+const VERSION = "kisene-v18";
 const SHELL = [
   "./",
   "./index.html",
@@ -24,7 +24,7 @@ const SHELL = [
   "./supabase.js",
   "./manifest.webmanifest",
   "./icon-192.png",
-  "./logo-splash.png",
+  "./logo-splash.webp",
   "./icon-512.png",
   "./apple-touch-icon.png"
 ];
