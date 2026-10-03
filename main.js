@@ -85,6 +85,11 @@ function navTrack() {
   if (!navCur) { navCur = snap; return; }
   if (navKey(snap) === navKey(navCur)) return;
   if (navRestoring || (typeof tourActive === "function" && tourActive())) { navCur = snap; return; }
+  // pagrindiniai 4 langai yra vienas lygis: tarp jų istorija nekaupiama
+  if (navIsTop(snap)) {
+    if (navStack.length) { navIgnorePop++; history.go(-navStack.length); navStack = []; }
+    navCur = snap; return;
+  }
   const top = navStack[navStack.length - 1];
   if (top && navKey(top) === navKey(snap)) {
     // paspaustas „‹ atgal“ mygtukas: tai tas pats, kas grįžti istorijoje
@@ -96,6 +101,7 @@ function navTrack() {
   }
   navCur = snap;
 }
+const navIsTop = n => !n.sub && !n.cat && !n.imp;
 function navApply(n) {
   S.tab = n.tab; S.sub = n.sub; S.confirm = null;
   if (n.inv && S.invView) S.invView.tab = n.inv;
@@ -491,11 +497,11 @@ document.addEventListener("touchend", e => {
     if (next > ymOf(todayISO())) return;
     S.ym = next; resetAI(); anim(dx < 0 ? "slide-l" : "slide-r"); render(); return;
   }
-  // į dešinę: atgal į ankstesnį langą (arba pagal hierarchiją)
-  if (dx > 0) { if (NAV_TRANSIENT.includes(S.sub)) return; anim("slide-r"); navBack(); return; }
-  // į kairę: tik pagrindinėse skiltyse pereina į kitą skiltį
-  if (S.sub || S.filter.imp) return;
-  const i = TAB_ORDER.indexOf(S.tab), j = i + 1;
+  const top = !S.sub && !S.filter.imp && !S.filter.cat;
+  // giliau esančiame lange: į dešinę grįžta atgal, į kairę nieko nedaro
+  if (!top) { if (dx > 0 && !NAV_TRANSIENT.includes(S.sub)) { anim("slide-r"); navBack(); } return; }
+  // pagrindiniuose 4 languose: pereina į gretimą langą
+  const i = TAB_ORDER.indexOf(S.tab), j = i + (dx < 0 ? 1 : -1);
   if (i < 0 || j < 0 || j >= TAB_ORDER.length) return;
   if (TAB_ORDER[j] === "list") S.filter.cat = null;
   anim(dx < 0 ? "slide-l" : "slide-r"); go(TAB_ORDER[j]);
