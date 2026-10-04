@@ -178,7 +178,7 @@ async function render(fromData) {
   $("#view").innerHTML = html;
   if (S.tab === "overview") mountBars();
   if (S.tab === "invest" && !S.sub && S.invView.tab !== "market") { mountLine(valueSeries()); renderInvStatus(); }
-  if (S.tab === "invest" && S.sub === "chart" && S.mkt.sym) { const c = S.mkt.charts[S.mkt.sym.symbol + "|" + S.mkt.range]; if (c?.data) mountPriceChart(c.data.points, c.data.currency, S.mkt.range); }
+  if (S.tab === "invest" && S.sub === "chart" && S.mkt.sym) { const c = S.mkt.charts[S.mkt.sym.symbol + "|" + S.mkt.range]; if (c?.data) mountPriceChart(c.data, S.mkt.range); }
   if (S.tab === "invest" && S.invView.tab === "market" && !S.sub) renderMarketResults();
   if (S.tab === "more" && S.sub === "wealth") mountWealth(wealthSeries(S.wealthRange || "1y"));
   if (S.tab === "more" && S.sub === "year") { const yc = $("#yearChart"); if (yc) mountBars("#yearChart", yc.dataset.months.split(",")); }
@@ -277,6 +277,8 @@ document.addEventListener("click", async e => {
   if (d.invtab) { S.invView.tab = d.invtab; S.sub = null; render(); window.scrollTo(0, 0); return; }
   if (d.chart) { S.mkt.from = S.invView.tab === "market" ? "market" : "portfolio"; openChart(d.chart, d.cname, d.ctype); return; }
   if (d.mrange) { S.mkt.range = d.mrange; render(); return; }
+  if (d.cstyle) { S.cfg.prefs = {...(S.cfg.prefs || {}), chartStyle: d.cstyle}; saveSettings("prefs"); render(); if (S.tab === "invest" && S.invView.tab === "market" && !S.sub) renderMarketResults(); return; }
+  if (d.wrange2) { S.cfg.prefs = {...(S.cfg.prefs || {}), watchRange: d.wrange2}; saveSettings("prefs"); render(); renderMarketResults(); return; }
   if (d.invback) { S.invView.tab = d.invback; S.sub = null; render(); window.scrollTo(0, 0); return; }
   if (d.wrange) { S.wealthRange = d.wrange; render(); return; }
   if (d.group) { S.invView.group = d.group; render(); return; }

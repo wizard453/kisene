@@ -75,8 +75,31 @@ function vMarket() {
   return `${invSeg()}
   <form id="mktForm" class="mktsearch"><input class="search" id="mktQ" type="search" placeholder="Ieškok akcijų, ETF, kriptovaliutų, pvz. Tesla, VWCE, BTC" value="${esc(S.mkt.q)}" autocomplete="off" enterkeyhint="search"></form>
   <div id="mktResults"></div>
-  ${w.length ? `<section class="card"><div class="sec-h"><h2>Stebimi</h2><span class="aside">${w.length}</span></div><div class="txs">${w.map(quoteRow).join("")}</div></section>` : ""}
+  ${w.length ? vWatchCards(w) : ""}
   <section class="card"><div class="sec-h"><h2>Populiarūs</h2></div><div class="txs">${QUICK_PICKS.filter(q => !inWatch(q.symbol)).map(quoteRow).join("")}</div></section>`;
+}
+
+/* ---------- Stebimų kortelės su grafikais ---------- */
+const W_RANGES = [["1d", "1 d."], ["5d", "5 d."], ["1mo", "1 mėn."], ["6mo", "6 mėn."], ["1y", "1 m."]];
+const wRange = () => S.cfg.prefs?.watchRange || "1mo";
+function watchCard(item) {
+  const rg = wRange(), c = S.mkt.charts[item.symbol + "|" + rg];
+  if (!c) loadChart(item.symbol, rg);
+  const data = c?.data, pts = data?.points || [], q = S.mkt.quotes[item.symbol];
+  const price = data?.price ?? q?.price ?? (pts.length ? pts[pts.length - 1][1] : null), cur = data?.currency || q?.currency;
+  const first = pts.length ? (rg === "1d" && data.prevClose ? data.prevClose : pts[0][1]) : null;
+  const ch = price != null && first ? chg(price, first) : null;
+  return `<button class="wcard" data-chart="${esc(item.symbol)}" data-cname="${esc(item.name || "")}" data-ctype="${esc(item.type || "")}">
+    <span class="wc-h"><span class="wc-n"><b>${esc(item.name || item.symbol)}</b><small>${esc(item.symbol)}${MKT_TYPES[item.type] ? " · " + MKT_TYPES[item.type] : ""}</small></span>
+      <span class="wc-p">${price != null ? `<b class="num">${priceFmt(price, cur)}</b>` : ""}${ch !== null ? `<small class="num ${ch >= 0 ? "pos" : "negc"}">${ch >= 0 ? "+" : "−"}${pct1(Math.abs(ch))}</small>` : ""}</span></span>
+    <span class="wc-c">${!c || c.loading ? `<span class="wc-ld"></span>` : c.err || pts.length < 2 ? `<small class="muted">Grafiko nėra</small>` : priceChart(pts, cur, rg, chartCandles(data, 40), true)}</span>
+  </button>`;
+}
+function vWatchCards(w) {
+  return `<section class="card"><div class="sec-h"><h2>Stebimi</h2><span class="aside">${w.length}</span></div>
+    <div class="row between wc-bar"><div class="filters ranges">${W_RANGES.map(([k, n]) => `<button class="chip" data-wrange2="${k}" aria-pressed="${wRange() === k}">${n}</button>`).join("")}</div></div>
+    ${styleSeg()}
+    <div class="wgrid">${w.slice(0, 20).map(watchCard).join("")}</div></section>`;
 }
 
 /* ---------- Simbolio grafikas ---------- */
@@ -89,45 +112,84 @@ async function loadChart(sym, range) {
     S.mkt.charts[key] = {data: r.chart, fx: r.fxToEur, at: Date.now()};
   } catch (e) { S.mkt.charts[key] = {err: e.message, at: Date.now()}; }
   if (S.sub === "chart" && S.mkt.sym?.symbol === sym && S.mkt.range === range) render(true);
+  else if (S.tab === "invest" && S.invView.tab === "market" && !S.sub && range === wRange()) { clearTimeout(loadChart.t); loadChart.t = setTimeout(() => { render(true); renderMarketResults(); }, 120); }
 }
 function openChart(sym, name, type) {
   S.mkt.sym = {symbol: sym, name: name || sym, type: type || ""};
   S.tab = "invest"; S.sub = "chart"; render(); window.scrollTo(0, 0);
 }
-function priceChart(pts, cur, range) {
-  const W = 340, H = 200, L = 6, R = 50, T = 10, B = 22, pw = W - L - R, ph = H - T - B;
-  const vals = pts.map(p => p[1]);
-  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.08 || hi * 0.01 || 1; lo -= pad; hi += pad;
-  const x = i => L + i / (pts.length - 1) * pw, y = v => T + ph - (v - lo) / (hi - lo) * ph;
-  const up = vals[vals.length - 1] >= vals[0], col = up ? "var(--good)" : "var(--crit)";
-  const d = pts.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p[1]).toFixed(1)).join("");
-  let g = "";
-  for (let i = 0; i <= 3; i++) { const v = lo + (hi - lo) * i / 3; g += `<line x1="${L}" x2="${L + pw}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" ${i ? 'stroke-dasharray="2 4"' : ""}/><text x="${L + pw + 6}" y="${y(v) + 4}" font-size="10.5" fill="var(--muted)" font-family="var(--f-num)">${kfmt(v).length > 6 ? kfmt(v) : fmtN.format(v >= 100 ? Math.round(v) : Math.round(v * 100) / 100)}</text>`; }
-  const lab = t => { const dt = new Date(t * 1000); return range === "1d" ? pad2(dt.getHours()) + ":" + pad2(dt.getMinutes()) : range === "5d" ? dt.getDate() + " " + MSHORT[dt.getMonth()].toLowerCase() : MSHORT[dt.getMonth()] + " " + String(dt.getFullYear()).slice(2); };
-  g += [0, Math.floor((pts.length - 1) / 2), pts.length - 1].map(i => `<text x="${x(i)}" y="${H - 5}" text-anchor="${i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"}" font-size="10.5" fill="var(--muted)" font-family="var(--f-body)">${lab(pts[i][0])}</text>`).join("");
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kainos grafikas">${g}
-    <path d="${d}L${x(pts.length - 1)} ${T + ph}L${x(0)} ${T + ph}Z" fill="${col}" opacity=".1"/>
-    <path d="${d}" fill="none" stroke="${col}" stroke-width="2"/>
-    <circle cx="${x(pts.length - 1)}" cy="${y(vals[vals.length - 1])}" r="3.5" fill="${col}"/>
-    <line class="xh" x1="0" x2="0" y1="${T}" y2="${T + ph}" stroke="var(--muted)" visibility="hidden"/>
-    <rect class="hitarea" x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent"/></svg>`;
+const chartStyle = () => S.cfg.prefs?.chartStyle === "candle" ? "candle" : "line";
+// žvakės sujungiamos, kad jų būtų ne daugiau kaip max (kitaip telefone jos per plonos)
+function aggCandles(c, max) {
+  if (!c || c.length <= max) return c || [];
+  const k = Math.ceil(c.length / max), out = [];
+  for (let i = 0; i < c.length; i += k) {
+    const g = c.slice(i, i + k);
+    out.push([g[0][0], g[0][1], Math.max(...g.map(x => x[2])), Math.min(...g.map(x => x[3])), g[g.length - 1][4]]);
+  }
+  return out;
 }
-function mountPriceChart(pts, cur, range) {
+// bendras kainos grafikas: linija arba žvakės; mini variante be ašių
+function priceChart(pts, cur, range, candles, mini) {
+  const W = 340, H = mini ? 96 : 200, L = mini ? 2 : 6, R = mini ? 2 : 50, T = mini ? 6 : 10, B = mini ? 4 : 22, pw = W - L - R, ph = H - T - B;
+  const useC = candles && candles.length >= 2;
+  const n = useC ? candles.length : pts.length;
+  const vals = useC ? candles.flatMap(c => [c[2], c[3]]) : pts.map(p => p[1]);
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.08 || hi * 0.01 || 1; lo -= pad; hi += pad;
+  const slot = pw / n;
+  const x = i => useC ? L + slot * (i + 0.5) : L + i / (n - 1) * pw, y = v => T + ph - (v - lo) / (hi - lo) * ph;
+  const firstV = useC ? candles[0][1] : pts[0][1], lastV = useC ? candles[n - 1][4] : pts[n - 1][1];
+  const up = lastV >= firstV, col = up ? "var(--good)" : "var(--crit)";
+  let g = "";
+  if (!mini) {
+    for (let i = 0; i <= 3; i++) { const v = lo + (hi - lo) * i / 3; g += `<line x1="${L}" x2="${L + pw}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" ${i ? 'stroke-dasharray="2 4"' : ""}/><text x="${L + pw + 6}" y="${y(v) + 4}" font-size="10.5" fill="var(--muted)" font-family="var(--f-num)">${kfmt(v).length > 6 ? kfmt(v) : fmtN.format(v >= 100 ? Math.round(v) : Math.round(v * 100) / 100)}</text>`; }
+    const tAt = i => useC ? candles[i][0] : pts[i][0];
+    const lab = t => { const dt = new Date(t * 1000); return range === "1d" ? pad2(dt.getHours()) + ":" + pad2(dt.getMinutes()) : range === "5d" ? dt.getDate() + " " + MSHORT[dt.getMonth()].toLowerCase() : MSHORT[dt.getMonth()] + " " + String(dt.getFullYear()).slice(2); };
+    g += [0, Math.floor((n - 1) / 2), n - 1].map(i => `<text x="${x(i)}" y="${H - 5}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}" font-size="10.5" fill="var(--muted)" font-family="var(--f-body)">${lab(tAt(i))}</text>`).join("");
+  }
+  let body;
+  if (useC) {
+    const bw = Math.max(1.2, Math.min(12, slot * 0.66));
+    body = candles.map((c, i) => {
+      const [, o, h, l, cl] = c, cc = cl >= o ? "var(--good)" : "var(--crit)", xx = x(i).toFixed(1);
+      const top = y(Math.max(o, cl)), bh = Math.max(1, Math.abs(y(o) - y(cl)));
+      return `<line x1="${xx}" x2="${xx}" y1="${y(h).toFixed(1)}" y2="${y(l).toFixed(1)}" stroke="${cc}" stroke-width="1"/><rect x="${(x(i) - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${cc}" rx="${bw > 4 ? 1 : 0}"/>`;
+    }).join("");
+  } else {
+    const d = pts.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p[1]).toFixed(1)).join("");
+    body = `<path d="${d}L${x(n - 1)} ${T + ph}L${x(0)} ${T + ph}Z" fill="${col}" opacity=".1"/><path d="${d}" fill="none" stroke="${col}" stroke-width="${mini ? 1.8 : 2}"/>${mini ? "" : `<circle cx="${x(n - 1)}" cy="${y(lastV)}" r="3.5" fill="${col}"/>`}`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kainos grafikas"${mini ? ' preserveAspectRatio="none"' : ""}>${g}${body}
+    ${mini ? "" : `<line class="xh" x1="0" x2="0" y1="${T}" y2="${T + ph}" stroke="var(--muted)" visibility="hidden"/><rect class="hitarea" x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent"/>`}</svg>`;
+}
+function chartCandles(data, max) { return chartStyle() === "candle" && data?.ohlc?.length >= 2 ? aggCandles(data.ohlc, max) : null; }
+function mountPriceChart(data, range) {
+  const pts = data?.points, cur = data?.currency;
   const host = $("#pxChart"); if (!host || !pts || pts.length < 2) return;
-  host.innerHTML = priceChart(pts, cur, range);
+  const cand = chartCandles(data, 70);
+  host.innerHTML = priceChart(pts, cur, range, cand);
   const svg = host.querySelector("svg"), tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; host.appendChild(tip);
   const xh = svg.querySelector(".xh"), hit = svg.querySelector(".hitarea");
+  const n = cand ? cand.length : pts.length, pw = 284;
   const move = e => {
-    const rb = svg.getBoundingClientRect(), sc = rb.width / 340;
-    const i = Math.max(0, Math.min(pts.length - 1, Math.round(((e.clientX - rb.left) / sc - 6) / 284 * (pts.length - 1))));
-    const xx = 6 + i / (pts.length - 1) * 284; xh.setAttribute("x1", xx); xh.setAttribute("x2", xx); xh.setAttribute("visibility", "visible");
-    const dt = new Date(pts[i][0] * 1000);
-    tip.innerHTML = `<b>${dt.getDate()} ${MSHORT[dt.getMonth()].toLowerCase()}. ${dt.getFullYear()}${range === "1d" || range === "5d" ? " " + pad2(dt.getHours()) + ":" + pad2(dt.getMinutes()) : ""}</b><span class="num">${priceFmt(pts[i][1], cur)}</span> · <span class="num ${pts[i][1] >= pts[0][1] ? "pos" : "negc"}">${chg(pts[i][1], pts[0][1]) >= 0 ? "+" : "−"}${pct1(Math.abs(chg(pts[i][1], pts[0][1])))}</span>`;
-    tip.style.left = Math.max(70, Math.min(host.clientWidth - 70, xx * sc)) + "px"; tip.style.top = "6px"; tip.hidden = false;
+    const rb = svg.getBoundingClientRect(), sc = rb.width / 340, rel = (e.clientX - rb.left) / sc - 6;
+    const i = Math.max(0, Math.min(n - 1, cand ? Math.floor(rel / (pw / n)) : Math.round(rel / pw * (n - 1))));
+    const xx = cand ? 6 + pw / n * (i + 0.5) : 6 + i / (n - 1) * pw;
+    xh.setAttribute("x1", xx); xh.setAttribute("x2", xx); xh.setAttribute("visibility", "visible");
+    const t = cand ? cand[i][0] : pts[i][0], dt = new Date(t * 1000);
+    const head = `<b>${dt.getDate()} ${MSHORT[dt.getMonth()].toLowerCase()}. ${dt.getFullYear()}${range === "1d" || range === "5d" ? " " + pad2(dt.getHours()) + ":" + pad2(dt.getMinutes()) : ""}</b>`;
+    if (cand) {
+      const [, o, h, l, c] = cand[i];
+      tip.innerHTML = `${head}<span class="num">Atidarymas ${priceFmt(o, cur)}</span><br><span class="num">Uždarymas ${priceFmt(c, cur)}</span><br><span class="num">Didž. ${priceFmt(h, cur)} · Maž. ${priceFmt(l, cur)}</span>`;
+    } else {
+      tip.innerHTML = `${head}<span class="num">${priceFmt(pts[i][1], cur)}</span> · <span class="num ${pts[i][1] >= pts[0][1] ? "pos" : "negc"}">${chg(pts[i][1], pts[0][1]) >= 0 ? "+" : "−"}${pct1(Math.abs(chg(pts[i][1], pts[0][1])))}</span>`;
+    }
+    tip.style.left = Math.max(80, Math.min(host.clientWidth - 80, xx * sc)) + "px"; tip.style.top = "6px"; tip.hidden = false;
   };
   hit.addEventListener("pointermove", move); hit.addEventListener("pointerdown", move);
   hit.addEventListener("pointerleave", () => { tip.hidden = true; xh.setAttribute("visibility", "hidden"); });
 }
+const styleSeg = () => `<div class="seg two cstyle" role="radiogroup" aria-label="Grafiko stilius"><button data-cstyle="line" aria-pressed="${chartStyle() === "line"}">Linija</button><button data-cstyle="candle" aria-pressed="${chartStyle() === "candle"}">Žvakės</button></div>`;
 function myPositionFor(sym) {
   if (!S.inv.size) return null;
   const p = portfolio();
@@ -150,6 +212,8 @@ function vChart() {
   ${price != null ? `<div class="pxprice"><b class="num">${priceFmt(price, data.currency)}</b>${ch !== null ? `<span class="num ${ch >= 0 ? "pos" : "negc"}">${ch >= 0 ? "+" : "−"}${priceFmt(Math.abs(price - first), data.currency)} (${ch >= 0 ? "+" : "−"}${pct1(Math.abs(ch))})</span><small>${RANGES.find(r => r[0] === S.mkt.range)[1]}</small>` : ""}
     ${data.currency && data.currency !== "EUR" && c.fx ? `<div class="fine">≈ ${eur(price * c.fx)}</div>` : ""}</div>` : ""}
   <div class="filters ranges">${RANGES.map(([k, n]) => `<button class="chip" data-mrange="${k}" aria-pressed="${S.mkt.range === k}">${n}</button>`).join("")}</div>
+  ${styleSeg()}
+  ${chartStyle() === "candle" && data && !data.ohlc ? `<div class="fine">Žvakėms reikia atnaujinti serverio funkciją market-data. Kol kas rodoma linija.</div>` : ""}
   <div class="chart pxchart" id="pxChart">${!c || c.loading ? `<div class="empty">Įkeliama…</div>` : c.err ? `<div class="empty">${esc(c.err)}</div>` : pts.length < 2 ? `<div class="empty">Šiam laikotarpiui duomenų nėra.</div>` : ""}</div>
   ${data ? `<div class="kv">
     ${data.dayLow != null && data.dayHigh != null ? `<span>Dienos intervalas</span><b class="num">${priceFmt(data.dayLow, data.currency)} – ${priceFmt(data.dayHigh, data.currency)}</b>` : ""}
