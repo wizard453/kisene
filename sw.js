@@ -1,6 +1,6 @@
 // Kišenė: service worker. Leidžia programėlei atsidaryti ir be interneto.
 // Pakeitus programėlės failus, padidink VERSION, kad telefonai gautų naują versiją.
-const VERSION = "kisene-v28";
+const VERSION = "kisene-v30";
 const SHELL = [
   "./",
   "./index.html",
@@ -18,7 +18,7 @@ const SHELL = [
   "./edit.js",
   "./recurring.js",
   "./theme.js",
-  "./ai.js", "./imports.js", "./partner.js", "./help.js", "./tour.js",
+  "./ai.js", "./imports.js", "./partner.js", "./trends.js", "./help.js", "./tour.js",
   "./main.js",
   "./config.js",
   "./supabase.js",

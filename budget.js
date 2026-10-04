@@ -244,8 +244,9 @@ function ovSpend(a) {
   const withBudget = expCats.filter(c => S.cfg.budgets[c.id] > 0 && !(a.byCat[c.id] > 0)).map(c => ({id: c.id, name: c.name, color: c.color, v: 0}));
   const rows = legendFor([...entries.filter(e => e.v > 0).sort((x, y) => y.v - x.v), ...withBudget], a.exp, true);
   return `<section class="card">
-    <div class="sec-h"><h2>Kur keliauja pinigai</h2><span class="aside num">${eur0(a.exp)}</span></div>
+    <div class="sec-h"><h2>Kur keliauja pinigai</h2>${infoBtn("spend")}<span class="aside num">${eur0(a.exp)}</span></div>
     ${a.exp > 0 || rows ? `<div class="donut-wrap">${donut(slices, a.exp, "Išlaidos", true)}<div class="legend">${rows || '<div class="fine">Išlaidų šį mėnesį nėra.</div>'}</div></div>` : `<div class="empty">Šį mėnesį išlaidų dar nėra.</div>`}
+    <button class="linkbtn more-link" data-go="more" data-sub="spendtrend">Kitimas laike ir AI analizė ›</button>
   </section>`;
 }
 // Investicijų pajamos mėnesį (dividendai, palūkanos, realizuotas pelnas), skaičiuojamos portfelyje
@@ -267,10 +268,11 @@ function ovIncome(a, txs) {
   if (!entries.length && !extra.length) return `<section class="card"><div class="sec-h"><h2>Iš kur ateina pajamos</h2></div><div class="empty">Šį mėnesį pajamų dar nėra.</div></section>`;
   const slices = topSlices(entries);
   return `<section class="card">
-    <div class="sec-h"><h2>Iš kur ateina pajamos</h2><span class="aside num">${eur0(total)}${prev > 0 ? ` <span class="${total >= prev ? "pos" : "negc"}">${total >= prev ? "↑" : "↓"} ${pct(Math.abs((total - prev) / prev * 100))}</span>` : ""}</span></div>
+    <div class="sec-h"><h2>Iš kur ateina pajamos</h2>${infoBtn("income")}<span class="aside num">${eur0(total)}${prev > 0 ? ` <span class="${total >= prev ? "pos" : "negc"}">${total >= prev ? "↑" : "↓"} ${pct(Math.abs((total - prev) / prev * 100))}</span>` : ""}</span></div>
     <div class="donut-wrap">${total > 0 ? donut(slices, total, "Pajamos", true) : ""}<div class="legend">${legendFor(entries, total, false)}${legendFor(extra, 0, false)}</div></div>
     ${ii && Math.abs(ii.total) >= 0.01 ? `<div class="fine">Investicijų grąža (dividendai ${eur(ii.div)}, palūkanos ${eur(ii.int)}, pardavimų rezultatas ${signed(ii.gain)}) lieka investavimo platformose, todėl į mėnesio pajamas neįskaičiuojama.</div>` : ""}
     <div class="row between"><span class="fine">Šaltinį pakeisi paspaudęs operaciją.</span><button class="linkbtn" data-go="more" data-sub="cats">Tvarkyti šaltinius</button></div>
+    <button class="linkbtn more-link" data-go="more" data-sub="inctrend">Pajamų kitimas laike ›</button>
   </section>`;
 }
 function ovInsights(a, txs) {

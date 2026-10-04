@@ -144,7 +144,7 @@ function viewHtml() {
   if (S.tab === "overview") return vOverview();
   if (S.tab === "list") return vList();
   if (S.tab === "invest") return vInvest();
-  const subs = {ai: vAI, import: vImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp, together: vTogether};
+  const subs = {ai: vAI, import: vImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp, together: vTogether, spendtrend: () => vTrend("exp"), inctrend: () => vTrend("inc")};
   return (subs[S.sub] || vMore)();
 }
 async function render(fromData) {
@@ -180,7 +180,8 @@ async function render(fromData) {
   if (S.tab === "invest" && !S.sub && S.invView.tab !== "market") { mountLine(valueSeries()); renderInvStatus(); }
   if (S.tab === "invest" && S.sub === "chart" && S.mkt.sym) { const c = S.mkt.charts[S.mkt.sym.symbol + "|" + S.mkt.range]; if (c?.data) mountPriceChart(c.data, S.mkt.range); }
   if (S.tab === "invest" && S.invView.tab === "market" && !S.sub) renderMarketResults();
-  if (S.tab === "more" && S.sub === "wealth") mountWealth(wealthSeries(S.wealthRange || "1y"));
+  if (S.tab === "more" && (S.sub === "spendtrend" || S.sub === "inctrend") && S.trend._m) mountTrendChart(S.trend._m, S.trend._v);
+  if (S.tab === "more" && S.sub === "wealth") mountWealth(wealthSeries(S.wealthRangeEff || S.wealthRange || "all"));
   if (S.tab === "more" && S.sub === "year") { const yc = $("#yearChart"); if (yc) mountBars("#yearChart", yc.dataset.months.split(",")); }
   checkAlerts();
   renderSync();
@@ -281,6 +282,7 @@ document.addEventListener("click", async e => {
   if (d.wrange2) { S.cfg.prefs = {...(S.cfg.prefs || {}), watchRange: d.wrange2}; saveSettings("prefs"); render(); renderMarketResults(); return; }
   if (d.invback) { S.invView.tab = d.invback; S.sub = null; render(); window.scrollTo(0, 0); return; }
   if (d.wrange) { S.wealthRange = d.wrange; render(); return; }
+  if (d.wtoggle) { const h = S.wealthHidden || []; S.wealthHidden = h.includes(d.wtoggle) ? h.filter(x => x !== d.wtoggle) : [...h, d.wtoggle]; render(); return; }
   if (d.group) { S.invView.group = d.group; render(); return; }
   if (d.editcat) { openCatSheet(catById(d.editcat)); return; }
   if (d.newcat) { openCatSheet(null, d.newcat); return; }

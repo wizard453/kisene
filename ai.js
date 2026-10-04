@@ -4,14 +4,25 @@
 function md(s) {
   const lines = esc(s).split(/\n/); let out = "", inList = false;
   const inline = x => x.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  let table = null;
+  const flushTable = () => { if (!table) return; out += `<div class="mdt"><table>${table.map((r, i) => `<tr>${r.map(c => i ? `<td>${inline(c)}</td>` : `<th>${inline(c)}</th>`).join("")}</tr>`).join("")}</table></div>`; table = null; };
   for (let l of lines) {
     l = l.trimEnd();
+    // lentelės eilutė: | a | b |
+    if (/^\s*\|.*\|\s*$/.test(l)) {
+      if (inList) { out += "</ul>"; inList = false; }
+      const cells = l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+      if (cells.every(c => /^:?-{2,}:?$/.test(c))) continue;
+      (table = table || []).push(cells); continue;
+    }
+    flushTable();
     const li = l.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)$/);
     if (li) { if (!inList) { out += "<ul>"; inList = true; } out += "<li>" + inline(li[1]) + "</li>"; continue; }
     if (inList) { out += "</ul>"; inList = false; }
     if (/^#{1,4}\s+/.test(l)) { out += "<h4>" + inline(l.replace(/^#{1,4}\s+/, "")) + "</h4>"; continue; }
     if (l.trim()) out += "<p>" + inline(l) + "</p>";
   }
+  flushTable();
   if (inList) out += "</ul>";
   return out;
 }

@@ -48,7 +48,7 @@ window.KISENE_CONFIG = {
 ## 3. Programėlės talpinimas GitHub Pages
 
 1. Užsiregistruok [github.com](https://github.com) ir sukurk naują repozitoriją, pvz. `kisene`. Pasirink **Public** (GitHub Pages nemokamai veikia su viešomis repozitorijomis). Joje nėra jokių slaptų duomenų.
-2. Repozitorijoje spausk **Add file** → **Upload files** ir nutempk **visus** projekto failus ir aplankus (`index.html`, `app.js`, `styles.css`, `config.js`, `sw.js`, `manifest.webmanifest`, `icons/`, `vendor/`, `supabase/`, `README.md`). Spausk **Commit changes**.
+2. Repozitorijoje spausk **Add file** → **Upload files** ir nutempk visus failus iš pagrindinio projekto aplanko (`index.html`, visus `.js`, `.png`, `styles.css`, `manifest.webmanifest`). Aplanko `supabase` įkelti nereikia, jo failai skirti Supabase. Spausk **Commit changes**.
 3. Atidaryk **Settings** → **Pages**. Prie **Source** pasirink **Deploy from a branch**, šaką `main`, aplanką `/ (root)` ir spausk **Save**.
 4. Po 1–2 minučių programėlė bus pasiekiama adresu `https://TAVO-VARDAS.github.io/kisene/`. Išsisaugok šį adresą.
 
@@ -243,31 +243,16 @@ Išsamesnes klaidas rasi Supabase: **Edge Functions** → `ai-advisor` → **Log
 ## Failų sąrašas
 
 ```
-index.html                         programėlės puslapis
-js/util.js                         bendros funkcijos, CSV skaitymas, aprašymų valymas
-js/data.js                         duomenys ir sinchronizacija
-js/budget.js                       apžvalga, operacijos, sąskaitos, kategorijos, tikslai
-js/importer.js                     banko ir investicijų CSV importas
-js/invest.js                       investicijų skaičiavimai ir rodiniai
-js/wealth.js                       turtas (grynoji vertė) laike
-js/report.js                       metų ataskaita
-js/onboard.js                      pradžios vedlys
-js/notify.js                       pranešimai
-js/market.js                       rinka, grafikai, Trading 212 prijungimas
-js/edit.js                         redagavimo langai, apžvalgos išdėstymas
-js/recurring.js                    pasikartojančių mokėjimų atpažinimas ir sekimas
-js/theme.js                        išvaizda ir „Daugiau“ meniu
-js/ai.js                           AI patarėjas
-js/main.js                         paleidimas ir valdymas
-styles.css                         išvaizda (šviesi ir tamsi tema)
+index.html, styles.css, manifest.webmanifest, sw.js   programėlės puslapis, išvaizda, įdiegimas, darbas be interneto
 config.js                          tavo Supabase adresas ir viešas raktas
-sw.js                              darbas be interneto
-manifest.webmanifest               įdiegimo informacija (pavadinimas, ikonos)
-icons/                             ikonos
-vendor/supabase.js                 Supabase biblioteka (v2.117.2)
-supabase/schema.sql                duomenų bazės lentelės ir apsauga
-supabase/functions/ai-advisor/     AI patarėjo serverio funkcija
-supabase/functions/market-data/    kainų, grafikų, paieškos ir kursų serverio funkcija
-supabase/functions/broker-sync/    Trading 212 prijungimas
-supabase/config.toml               tik diegiant per Supabase CLI
+supabase.js                        Supabase biblioteka (v2.117.2)
+util.js, data.js, main.js          bendros funkcijos, duomenys ir sinchronizacija, paleidimas
+budget.js, edit.js, recurring.js   biudžetas, redagavimas, pasikartojantys mokėjimai
+importer.js                        banko ir investicijų CSV importas
+invest.js, market.js, wealth.js    investicijos, rinka ir grafikai, turtas
+report.js, onboard.js, notify.js   metų ataskaita, pradžios vedlys, pranešimai
+theme.js, ai.js                    išvaizda, AI patarėjas
+help.js, tour.js                   pagalba ir pamokos, mokomasis turas
+*.png                              ikonos
+supabase/                          tik Supabase: schema.sql ir serverio funkcijos (į GitHub kelti nebūtina)
 ```
