@@ -229,7 +229,8 @@ function vWealthPage() {
   </section>
   ${comps.length > 1 ? `<section class="card"><div class="sec-h"><h2>Kaip keitėsi kiekviena dalis</h2></div>
     <div class="wparts">${comps.map(([k, n, col]) => { const f = firstKnown(k), dl = last[k] - f[k]; return `<div class="wpcard"><div class="wp-h"><span><i style="background:${col}"></i>${n}</span><b class="num">${last[k] < 0 ? "−" : ""}${eur0(Math.abs(last[k]))}</b></div>
-      <div class="wp-d num ${plClass(k === "debt" ? dl : dl)}">${signed(dl)} nuo ${dayLabel(f.d)}</div><div class="wp-c">${wealthChart(pts, true, k, col)}</div></div>`; }).join("")}</div></section>` : ""}
+      <div class="wp-d num ${plClass(k === "debt" ? dl : dl)}">${signed(dl)} nuo ${dayLabel(f.d)}</div><div class="wp-c">${wealthChart(pts, true, k, col)}</div></div>`; }).join("")}</div>
+    ${comps.some(([k]) => k === "inv") ? `<div class="fine">Investicijos yra rinkos vertė: visų pozicijų vertė tos dienos kaina ir dar neinvestuoti pinigai platformoje. Į ją įeina ir tai, ką įnešei, ir pelnas ar nuostolis. Kiek įnešta ir koks pelnas, matyti skiltyje Investicijos.</div>` : ""}</section>` : ""}
   ${c ? `<section class="card"><div class="sec-h"><h2>Kodėl pasikeitė</h2><span class="aside">nuo ${dayLabel(c.d0)}</span></div>
     <div class="why">
       <div class="wline"><span>Pradžioje</span><b class="num">${eur(c.start)}</b></div>

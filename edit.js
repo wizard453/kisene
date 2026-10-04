@@ -23,7 +23,7 @@ function openCatSheet(cat, type, onCreated, onBack) {
   const isEdit = !!cat;
   const used = categories().map(c => c.color);
   const st = {name: cat?.name || "", type: cat?.type || type || "exp", icon: cat?.icon || CAT_ICONS[cat?.id] || "tag", color: cat?.color || SWATCHES.find(s => !used.includes(s)) || "c1",
-    budget: cat && S.cfg.budgets[cat.id] ? String(S.cfg.budgets[cat.id]).replace(".", ",") : "", del: false, moveTo: ""};
+    budget: cat && budgetsFor(nowYm())[cat.id] ? String(budgetsFor(nowYm())[cat.id]).replace(".", ",") : "", del: false, moveTo: ""};
   const fixed = ["other", "iother"].includes(cat?.id);
   const count = isEdit ? [...S.txs.values()].filter(t => t.cat === cat.id).length : 0;
   const draw = () => {

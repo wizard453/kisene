@@ -38,7 +38,7 @@ function insights(ym, txs) {
   const out = []; const cur = monthAgg(ym, txs);
   const prev = [1, 2, 3].map(k => monthAgg(addMonths(ym, -k), txs)).filter(a => a.n > 0);
   for (const c of catsOf("exp")) {
-    const b = S.cfg.budgets[c.id]; const v = cur.byCat[c.id] || 0;
+    const b = budgetsFor(ym)[c.id]; const v = cur.byCat[c.id] || 0;
     if (b > 0 && v > b) out.push({lvl: "crit", ic: "!", t: `${c.name}: viršytas biudžetas ${eur(v - b)} (${eur(v)} iš ${eur0(b)}).`});
     else if (b > 0 && v >= b * 0.85) out.push({lvl: "warn", ic: "!", t: `${c.name}: išnaudota ${pct(v / b * 100)} biudžeto, liko ${eur(b - v)}.`});
   }
@@ -117,7 +117,7 @@ function spendable() {
   const left = expected - a.exp - saved - a.debt - pendOut;
   // biudžetuose dar numatyta (likusi biudžeto dalis, kurios dar neišleidai)
   let budLeft = 0;
-  for (const c of catsOf("exp")) { const b = S.cfg.budgets[c.id]; if (b > 0) budLeft += Math.max(0, b - (a.byCat[c.id] || 0)); }
+  for (const c of catsOf("exp")) { const b = budgetsFor(ym)[c.id]; if (b > 0) budLeft += Math.max(0, b - (a.byCat[c.id] || 0)); }
   return {left, perDay: left / daysLeft, daysLeft, expected, received: a.inc, waiting, fromAvg: useAvg && avgInc > known, spent: a.exp, saved, debt: a.debt, pendOut, pending, budLeft};
 }
 /* ---------- Grafikai ---------- */
@@ -226,7 +226,7 @@ function ovReview() {
 }
 function legendFor(entries, total, withBudgets) {
   return entries.map(s => {
-    const b = withBudgets ? S.cfg.budgets[s.id] : 0; const share = total ? s.v / total * 100 : 0;
+    const b = withBudgets ? budgetsFor(S.ym)[s.id] : 0; const share = total ? s.v / total * 100 : 0;
     let bud = "", barW = share, barC = `var(--${s.color})`;
     if (b > 0) {
       const u = s.v / b * 100; barW = Math.min(100, u); const cls = u > 100 ? "over" : u >= 85 ? "near" : "";
@@ -241,7 +241,7 @@ function ovSpend(a) {
   const expCats = catsOf("exp");
   const entries = [...expCats, ...Object.keys(a.byCat).filter(id => !expCats.some(c => c.id === id)).map(catById)].map(c => ({id: c.id, name: c.name, color: c.color, v: a.byCat[c.id] || 0}));
   const slices = topSlices(entries);
-  const withBudget = expCats.filter(c => S.cfg.budgets[c.id] > 0 && !(a.byCat[c.id] > 0)).map(c => ({id: c.id, name: c.name, color: c.color, v: 0}));
+  const withBudget = expCats.filter(c => budgetsFor(S.ym)[c.id] > 0 && !(a.byCat[c.id] > 0)).map(c => ({id: c.id, name: c.name, color: c.color, v: 0}));
   const rows = legendFor([...entries.filter(e => e.v > 0).sort((x, y) => y.v - x.v), ...withBudget], a.exp, true);
   return `<section class="card">
     <div class="sec-h"><h2>Kur keliauja pinigai</h2>${infoBtn("spend")}<span class="aside num">${eur0(a.exp)}</span></div>
@@ -464,15 +464,15 @@ function subHead(title, back) {
 function vBudgets() {
   const a = monthAgg(ymOf(todayISO()), allTx());
   return `${subHead("Biudžetai")}
-  <div class="set-group"><div class="fine">Nustatyk mėnesio ribą kategorijai. Apžvalgoje matysi, kiek liko, ir gausi įspėjimą prie 85 %. Šalia rodoma, kiek išleista šį mėnesį.</div>
-    ${catsOf("exp").map(c => `<div class="brow"><span class="sw" style="background:var(--${c.color})"></span><label for="b_${c.id}">${esc(c.name)}<small class="num">${eur(a.byCat[c.id] || 0)}</small></label><input id="b_${c.id}" data-bud="${c.id}" inputmode="decimal" placeholder="—" value="${S.cfg.budgets[c.id] ? String(S.cfg.budgets[c.id]).replace(".", ",") : ""}"></div>`).join("")}
+  <div class="set-group"><div class="fine">Nustatyk mėnesio ribą kategorijai. Apžvalgoje matysi, kiek liko, ir gausi įspėjimą prie 85 %. Šalia rodoma, kiek išleista šį mėnesį. Pakeitimai galioja nuo šio mėnesio, o praėję mėnesiai lieka su tuo metu buvusiomis ribomis.</div>
+    ${catsOf("exp").map(c => `<div class="brow"><span class="sw" style="background:var(--${c.color})"></span><label for="b_${c.id}">${esc(c.name)}<small class="num">${eur(a.byCat[c.id] || 0)}</small></label><input id="b_${c.id}" data-bud="${c.id}" inputmode="decimal" placeholder="—" value="${budgetsFor(nowYm())[c.id] ? String(budgetsFor(nowYm())[c.id]).replace(".", ",") : ""}"></div>`).join("")}
   </div>`;
 }
 
 /* ---------- Kategorijos ir taisyklės ---------- */
 function vCats() {
   const budA = monthAgg(ymOf(todayISO()), allTx());
-  const list = type => categories().filter(c => c.type === type && !c.archived).map(c => `<button class="tx" data-editcat="${c.id}"><span class="dot" style="background:var(--${c.color})">${catIcon(c)}</span><div><div class="t1">${esc(c.name)}</div><div class="t2">${type === "exp" ? (S.cfg.budgets[c.id] ? `Biudžetas ${eur0(S.cfg.budgets[c.id])} · išleista ${eur0(budA.byCat[c.id] || 0)}` : `Šį mėn. ${eur0(budA.byCat[c.id] || 0)}`) : `Šį mėn. ${eur0(budA.byInc[c.id] || 0)}`}</div></div><span class="chev">›</span></button>`).join("");
+  const list = type => categories().filter(c => c.type === type && !c.archived).map(c => `<button class="tx" data-editcat="${c.id}"><span class="dot" style="background:var(--${c.color})">${catIcon(c)}</span><div><div class="t1">${esc(c.name)}</div><div class="t2">${type === "exp" ? (budgetsFor(nowYm())[c.id] ? `Biudžetas ${eur0(budgetsFor(nowYm())[c.id])} · išleista ${eur0(budA.byCat[c.id] || 0)}` : `Šį mėn. ${eur0(budA.byCat[c.id] || 0)}`) : `Šį mėn. ${eur0(budA.byInc[c.id] || 0)}`}</div></div><span class="chev">›</span></button>`).join("");
   const hidden = categories().filter(c => c.archived);
   const rules = S.cfg.rules || [];
   const ruleTarget = r => r.type === "trf" ? "Pervedimas → " + accName(r.to_account_id) : catById(r.cat).name;

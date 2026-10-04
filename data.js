@@ -300,7 +300,40 @@ function bulkUpsert(table, rows) {
   refreshDemo(); saveCache(); flush();
 }
 const settingsTimers = {};
+/* ---------- Biudžetų istorija ----------
+   Biudžeto pakeitimas galioja nuo pasirinkto mėnesio (paprastai šio) ir vėlesniems.
+   Ankstesni mėnesiai lieka su tuo metu buvusiomis ribomis. */
+const BUD0 = "0000-00";
+const nowYm = () => ymOf(todayISO());
+const budHist = () => Array.isArray(S.cfg.prefs?.budgetHist) && S.cfg.prefs.budgetHist.length ? S.cfg.prefs.budgetHist : null;
+function ensureBudHist() {
+  if (budHist()) return;
+  // pirmas kartas: visos esamos ribos laikomos galiojusiomis visada
+  S.cfg.prefs = {...(S.cfg.prefs || {}), budgetHist: [{from: BUD0, b: {...(S.cfg.budgets || {})}}]};
+}
+function budgetsFor(ym) {
+  const h = budHist(); if (!h) return S.cfg.budgets || {};
+  let r = h[0].b;
+  for (const e of h) if (e.from <= ym) r = e.b;
+  return r || {};
+}
+const sameBud = (a, b) => { const ka = Object.keys(a).filter(k => a[k] > 0), kb = Object.keys(b).filter(k => b[k] > 0); return ka.length === kb.length && ka.every(k => a[k] === b[k]); };
+function recordBudgetChange() {
+  ensureBudHist();
+  const h = budHist().map(e => ({from: e.from, b: {...e.b}}));
+  const from = S.budFrom || nowYm();
+  const prev = h[h.length - 1].b, next = S.cfg.budgets || {};
+  const diff = [...new Set([...Object.keys(prev), ...Object.keys(next)])].filter(k => (prev[k] || 0) !== (next[k] || 0));
+  if (!diff.length) return;
+  if (!h.some(e => e.from === from)) { h.push({from, b: {...budgetsFor(from)}}); h.sort((a, b) => a.from.localeCompare(b.from)); }
+  for (const e of h) if (e.from >= from) for (const k of diff) { if (next[k] > 0) e.b[k] = next[k]; else delete e.b[k]; }
+  const out = h.filter((e, i) => i === 0 || !sameBud(e.b, h[i - 1].b));
+  S.cfg.prefs = {...S.cfg.prefs, budgetHist: out};
+  S.cfg.budgets = {...out[out.length - 1].b};
+  saveSettings("prefs");
+}
 function saveSettings(field, delay) {
+  if (field === "budgets" && !S._budRestore) recordBudgetChange();
   if (field === "demo_dismissed") { enqueue({kind: "settings", fields: ["demo_dismissed"]}); return; }
   saveCache();
   clearTimeout(settingsTimers[field]);

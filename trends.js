@@ -154,7 +154,10 @@ function vMethodAI() {
     ${st.err ? `<div class="err">${esc(st.err)}</div>` : ""}
     ${st.text || run ? `<div class="msg ai mai-out" id="maiOut">${st.text ? md(st.text) : '<span class="typing"><i></i><i></i><i></i></span>'}${run && st.text ? '<span class="caret"></span>' : ""}</div>` : ""}
     ${st.actions?.length ? `<div class="acts">${st.actions.map(a => `<div class="act ${st.applied ? "done" : "pending"}"><span class="ic">${st.applied ? "✓" : "?"}</span><span>${esc(describeAction(a))}</span></div>`).join("")}</div>
-      <div class="row">${st.applied ? `<span class="pill on">Biudžetai pritaikyti</span><button class="linkbtn" id="maiUndo">Atšaukti</button>` : `<button class="btn small" id="maiApply">Pritaikyti šiuos biudžetus</button>`}</div>` : ""}
+      ${st.applied ? `<div class="row"><span class="pill on">Pritaikyta nuo ${MONTHS_GEN[+st.from.slice(5) - 1]} mėn.</span><button class="linkbtn" id="maiUndo">Atšaukti</button></div>`
+      : `<div class="fine">Nuo kada taikyti? Praėję mėnesiai liks su tuo metu buvusiomis ribomis.</div>
+      <div class="seg mai-from">${[nowYm(), addMonths(nowYm(), 1)].map((ym, i) => `<button data-maifrom="${ym}" aria-pressed="${maiFrom() === ym}">${i ? "Nuo kito mėn." : "Nuo šio mėn."} (${MONTHS_GEN[+ym.slice(5) - 1]})</button>`).join("")}</div>
+      <div class="row"><button class="btn small" id="maiApply">Pritaikyti šiuos biudžetus</button></div>`}` : ""}
   </section>`;
 }
 function methodPrompt(mk) {
@@ -165,7 +168,7 @@ function methodPrompt(mk) {
   const inc = aggs.reduce((s, a) => s + a.inc, 0) / k, inv = aggs.reduce((s, a) => s + a.inv, 0) / k, debt = aggs.reduce((s, a) => s + a.debt, 0) / k;
   const byCat = {};
   for (const a of aggs) for (const [id, v] of Object.entries(a.byCat)) byCat[id] = (byCat[id] || 0) + v / k;
-  const catLines = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([id, v]) => `- ${id}: ${catById(id).name}: ${r2(v)} €${S.cfg.budgets[id] ? ` (dabartinis biudžetas ${S.cfg.budgets[id]} €)` : ""}`).join("\n");
+  const catLines = Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([id, v]) => `- ${id}: ${catById(id).name}: ${r2(v)} €${budgetsFor(nowYm())[id] ? ` (dabartinis biudžetas ${budgetsFor(nowYm())[id]} €)` : ""}`).join("\n");
   return `Pritaikyk mano išlaidoms metodą „${mk === "custom" ? "savo procentai" : BUDGET_METHODS[mk].name}“. Grupės ir dalis nuo pajamų: ${groups.map(([n, p]) => `${n} ${p} %`).join(", ")}.
 Mano paskutinių ${aggs.length} pilnų mėnesių vidurkiai per mėnesį: pajamos ${r2(inc)} €, investuota ${r2(inv)} €, paskoloms grąžinta ${r2(debt)} €.
 Išlaidos pagal kategorijas (id: pavadinimas: vidurkis):
@@ -202,7 +205,7 @@ async function runMethodAI() {
   render();
 }
 document.addEventListener("click", e => {
-  const b = e.target.closest("[data-trange],[data-tsel],[data-aimethod],[data-cgadd],[data-cgdel],#maiRun,#maiStop,#maiApply,#maiUndo"); if (!b || b.closest("#sheetRoot")) return;
+  const b = e.target.closest("[data-trange],[data-tsel],[data-aimethod],[data-cgadd],[data-cgdel],[data-maifrom],#maiRun,#maiStop,#maiApply,#maiUndo"); if (!b || b.closest("#sheetRoot")) return;
   e.stopPropagation();
   const d = b.dataset;
   if (d.trange !== undefined) { S.trend.range = +d.trange; render(); return; }
@@ -210,13 +213,16 @@ document.addEventListener("click", e => {
   if (d.aimethod) { if (S.mAI.status === "run") return; S.cfg.prefs = {...(S.cfg.prefs || {}), aiMethod: d.aimethod}; saveSettings("prefs"); if (!S.mAI.applied) S.mAI = {status: "idle", text: "", actions: null, applied: null, err: ""}; render(); return; }
   if (d.cgadd) { const g = [...customGroups(), ["Nauja grupė", 0]]; S.cfg.prefs = {...(S.cfg.prefs || {}), customMethod: g}; saveSettings("prefs"); render(); return; }
   if (d.cgdel !== undefined) { const g = customGroups().filter((_, i) => i !== +d.cgdel); S.cfg.prefs = {...(S.cfg.prefs || {}), customMethod: g}; saveSettings("prefs"); render(); return; }
+  if (d.maifrom) { S.mAI.from = d.maifrom; render(); return; }
   if (b.id === "maiRun") { runMethodAI(); return; }
   if (b.id === "maiStop") { S.mAI.ctrl?.abort(); return; }
   if (b.id === "maiApply") {
-    const snap = snapshot();
+    const snap = snapshot(), from = maiFrom();
+    S.budFrom = from;
     const res = S.mAI.actions.map(a => applyAction(a, snap));
+    S.budFrom = null;
     const fails = res.filter(r => typeof r !== "string").length;
-    S.mAI.applied = snap; render(); toast(fails ? `Pritaikyta, ${fails} nepavyko` : "Biudžetai pritaikyti"); return;
+    S.mAI.applied = snap; S.mAI.from = from; render(); toast(fails ? `Pritaikyta, ${fails} nepavyko` : "Biudžetai pritaikyti"); return;
   }
   if (b.id === "maiUndo") { if (S.mAI.applied) undoSnapshot(S.mAI.applied); S.mAI.applied = null; render(); toast("Biudžetai atkurti"); }
 }, true);
@@ -233,6 +239,10 @@ document.addEventListener("input", e => {
   if (sEl) { sEl.textContent = `Iš viso ${fmtN.format(sum)} %`; sEl.classList.toggle("err", Math.abs(sum - 100) > 0.01); }
   const run = $("#maiRun"); if (run) run.disabled = Math.abs(sum - 100) > 0.01;
 }, true);
+
+// pradžioje mėnesio (iki 10 d.) siūloma taikyti nuo šio mėnesio, vėliau nuo kito
+const MONTHS_GEN = ["sausio","vasario","kovo","balandžio","gegužės","birželio","liepos","rugpjūčio","rugsėjo","spalio","lapkričio","gruodžio"];
+const maiFrom = () => S.mAI.from || (new Date().getDate() <= 10 ? nowYm() : addMonths(nowYm(), 1));
 
 /* ---------- Informaciniai langai ---------- */
 const INFO = {
@@ -252,7 +262,7 @@ const INFO = {
     <li><b>Punktyrinė linija</b> yra vidutinės išlaidos per pilną mėnesį.</li>
     <li>Viršuje matyti vidurkis, praėjęs ir šis mėnuo. Rodyklė parodo, kiek praėjęs mėnuo skyrėsi nuo vidurkio.</li>
     <li><b>Pagal kategorijas</b>: kiekviena eilutė turi mažą grafiką ir vidutinę sumą per mėnesį. Paspaudus eilutę, didelis grafikas rodo tik tą kategoriją.</li>
-    <li><b>AI analizė pagal metodą</b>: pasirink metodą (pvz. 50/30/20) arba įrašyk savo procentus. AI suskirstys kategorijas į grupes, palygins su tikslu ir pasiūlys mėnesio ribas. Ribos pritaikomos tik paspaudus mygtuką, ir jas galima atšaukti.</li></ul>`],
+    <li><b>AI analizė pagal metodą</b>: pasirink metodą (pvz. 50/30/20) arba įrašyk savo procentus. AI suskirstys kategorijas į grupes, palygins su tikslu ir pasiūlys mėnesio ribas. Ribos pritaikomos tik paspaudus mygtuką, ir jas galima atšaukti. Gali pasirinkti, ar jos galioja nuo šio, ar nuo kito mėnesio. Praėję mėnesiai lieka su tuo metu buvusiomis ribomis.</li></ul>`],
   inctrend: ["Pajamų kitimas", `<p>Šiame lange matai, kaip tavo pajamos keitėsi per mėnesius.</p>
     <ul><li><b>Bendras grafikas</b>: kiekvienas stulpelis yra mėnuo, spalvos yra pajamų šaltiniai. Palietus stulpelį matyti suma ir šaltiniai.</li>
     <li><b>Punktyrinė linija</b> yra vidutinės pajamos per pilną mėnesį.</li>

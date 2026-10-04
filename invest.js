@@ -423,7 +423,7 @@ function openInvSheet(t, preset) {
 /* ---------- Investicijų importas ---------- */
 async function vInvImport() {
   const imp = S.invImp;
-  let body = `<div class="subhead"><button class="linkbtn" data-sub="">‹ Investicijos</button><h2>Investicijų importas</h2></div>
+  let body = `${S.tab === "more" ? subHead("Investicijų importas") : `<div class="subhead"><button class="linkbtn" data-sub="">‹ Investicijos</button><h2>Investicijų importas</h2></div>`}
   <div class="set-group"><div class="fine">Įkelk operacijų istoriją CSV formatu. Trading 212 ir Revolut failai atpažįstami automatiškai. Bet kokiai kitai platformai priskirk stulpelius pats: užtenka datos, sumos ir, jei tai pirkimai ar pardavimai, simbolio bei kiekio. Tą patį failą įkėlus dar kartą, dublikatų nebus.</div>
     <div class="row"><label class="btn ghost small" for="invFile" style="cursor:pointer">Pasirinkti CSV failą</label><input type="file" id="invFile" accept=".csv,text/csv,.txt" hidden>${imp ? `<span class="fine">${esc(imp.name)}${imp.preset !== "generic" ? " · " + esc(PRESET_NAMES[imp.preset]) + " formatas" : ""}</span>` : ""}</div></div>`;
   if (!imp) return body + vImportsList("inv");
@@ -461,7 +461,7 @@ async function doInvImport() {
   const ds = rows.map(r => r.date).sort();
   const impId = recordImport("inv", {file: imp.name || "", platform: imp.platform.trim(), from: ds[0], to: ds[ds.length - 1]});
   bulkUpsert("inv_tx", rows.map(r => invRow({...r, import_id: impId})));
-  S.invImp = null; S.sub = null; S.tab = "invest";
+  S.invImp = null; S.sub = S.tab === "more" ? "invimport" : null;
   render(); toast(`Importuota ${rows.length} operacijų`);
   refreshMarket(true);
 }

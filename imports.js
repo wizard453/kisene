@@ -110,7 +110,7 @@ document.addEventListener("click", e => {
       const imp = isInv ? invSetup(f.name, text) : bankSetup(f.name, text);
       if (!imp) { toast("Faile nerasta eilučių"); return; }
       deleteImport(key);
-      if (isInv) { S.invImp = imp; S.tab = "invest"; S.sub = "invimport"; }
+      if (isInv) { S.invImp = imp; S.sub = "invimport"; if (S.tab !== "more") S.tab = "invest"; }
       else { imp.account_id = acc && accById(acc) ? acc : "main"; S.imp = imp; S.tab = "more"; S.sub = "import"; }
       render(); window.scrollTo(0, 0);
     };

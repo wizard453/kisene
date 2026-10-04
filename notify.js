@@ -13,7 +13,7 @@ function computeAlerts() {
   const a = monthAgg(ym, txs);
   // biudžetai
   for (const c of catsOf("exp")) {
-    const b = S.cfg.budgets[c.id], v = a.byCat[c.id] || 0;
+    const b = budgetsFor(ym)[c.id], v = a.byCat[c.id] || 0;
     if (!(b > 0)) continue;
     if (v > b) out.push({key: `bud100:${ym}:${c.id}`, lvl: "crit", title: `${c.name}: biudžetas viršytas`, body: `Išleista ${eur(v)} iš ${eur0(b)} (viršyta ${eur(v - b)}).`, go: {cat: c.id}});
     else if (v >= b * 0.85) out.push({key: `bud85:${ym}:${c.id}`, lvl: "warn", title: `${c.name}: liko ${eur(b - v)}`, body: `Išnaudota ${pct(v / b * 100)} mėnesio biudžeto.`, go: {cat: c.id}});

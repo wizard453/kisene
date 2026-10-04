@@ -41,7 +41,7 @@ function aiContext() {
   for (const t of txs) if (t.type === "exp" && t.date >= addMonths(ym, -2) + "-01" && t.note) { const k = t.note; (merch[k] = merch[k] || {aprašymas: k, kategorija: catById(t.cat).name, kartai: 0, suma: 0}); merch[k].kartai++; merch[k].suma = r2(merch[k].suma + t.amount); }
   const ctx = {
     rodomas_mėnuo: ym, mėnuo_dar_nesibaigė: ym === now ? `taip, šiandien ${new Date().getDate()} diena` : "ne", valiuta: "EUR",
-    kategorijos: categories().filter(c => !c.archived).map(c => ({id: c.id, pavadinimas: c.name, tipas: c.type === "exp" ? "išlaidos" : "pajamos", ...(c.type === "exp" && S.cfg.budgets[c.id] ? {biudžetas: S.cfg.budgets[c.id]} : {})})),
+    kategorijos: categories().filter(c => !c.archived).map(c => ({id: c.id, pavadinimas: c.name, tipas: c.type === "exp" ? "išlaidos" : "pajamos", ...(c.type === "exp" && budgetsFor(nowYm())[c.id] ? {biudžetas: budgetsFor(nowYm())[c.id]} : {})})),
     sąskaitos: activeAccounts().map(a => ({id: a.id, pavadinimas: a.name, tipas: ACCOUNT_KINDS[a.kind], likutis: accountBalance(a)})),
     pasikartojančios: (S.cfg.recurring || []).map(r => ({id: r.id, aprašymas: r.note, suma: r.amount, diena: r.day, tipas: r.type, kategorija_id: r.cat, aktyvi: r.active})),
     tikslai: (S.cfg.goals || []).map(g => ({id: g.id, pavadinimas: g.name, tikslas: g.target, sutaupyta: g.saved, terminas: g.deadline || null})),
@@ -62,7 +62,7 @@ function aiContext() {
 
 /* ---------- Veiksmų pritaikymas ---------- */
 const exCat = (id, type) => { const c = categories().find(x => x.id === id && !x.archived); return c && (!type || c.type === type) ? c : null; };
-function snapshot() { return {cfg: JSON.parse(JSON.stringify({budgets: S.cfg.budgets, categories: S.cfg.categories, rules: S.cfg.rules, goals: S.cfg.goals, recurring: S.cfg.recurring})), tx: new Map()}; }
+function snapshot() { return {bh: JSON.parse(JSON.stringify(S.cfg.prefs?.budgetHist || null)), cfg: JSON.parse(JSON.stringify({budgets: S.cfg.budgets, categories: S.cfg.categories, rules: S.cfg.rules, goals: S.cfg.goals, recurring: S.cfg.recurring})), tx: new Map()}; }
 function touchTx(snap, t) { if (!snap.tx.has(t.id)) snap.tx.set(t.id, S.txs.has(t.id) ? {...S.txs.get(t.id)} : null); }
 function applyAction(a, snap) {
   const i = a.input || {};
@@ -186,7 +186,10 @@ function applyAction(a, snap) {
 }
 function undoSnapshot(snap) {
   Object.assign(S.cfg, snap.cfg);
+  if (snap.bh) { S.cfg.prefs = {...(S.cfg.prefs || {}), budgetHist: snap.bh}; saveSettings("prefs"); }
+  S._budRestore = !!snap.bh;
   for (const f of ["budgets", "categories", "rules", "goals", "recurring"]) saveSettings(f);
+  S._budRestore = false;
   const restore = [];
   for (const [id, orig] of snap.tx) { if (orig) restore.push(txRow(orig)); else if (S.txs.has(id)) removeTx(id); }
   if (restore.length) bulkUpsert("transactions", restore);

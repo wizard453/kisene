@@ -144,10 +144,11 @@ function viewHtml() {
   if (S.tab === "overview") return vOverview();
   if (S.tab === "list") return vList();
   if (S.tab === "invest") return vInvest();
-  const subs = {ai: vAI, import: vImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp, together: vTogether, spendtrend: () => vTrend("exp"), inctrend: () => vTrend("inc")};
+  const subs = {ai: vAI, import: vImport, invimport: vInvImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp, together: vTogether, spendtrend: () => vTrend("exp"), inctrend: () => vTrend("inc")};
   return (subs[S.sub] || vMore)();
 }
 async function render(fromData) {
+  if (S.loaded && S.cfg) ensureBudHist();
   const signedIn = !!S.user && !S.recovery;
   $("#authScreen").hidden = signedIn; $("#appScreen").hidden = !signedIn; $("#tabs").hidden = !signedIn;
   if (!signedIn) {

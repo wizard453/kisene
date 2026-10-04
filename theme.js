@@ -96,6 +96,7 @@ function moreItems() {
     {group: "Įrankiai", items: [
       ["ai", "AI patarėjas", "Klausk ir keisk nustatymus pokalbiu", "sparkle", "c5"],
       ["import", "Banko išrašo importas", "CSV iš bet kurio banko", "arrowin", "c10"],
+      ["invimport", "Investicijų importas", "Trading 212, Revolut ir kt. CSV", "briefcase", "c7"],
       ["review", "Be kategorijos", rv ? `${rv} laukia` : "Viskas sutvarkyta", "tag", "c4", rv],
       ["cats", "Kategorijos ir taisyklės", `${nRules} taisyklės`, "dots", "c8"]]},
     {group: "Pagalba", items: [
