@@ -63,7 +63,7 @@ function vOnboard() {
     <ul class="notes">
       <li><span class="ic">+</span><span>Išlaidą pridėsi mygtuku + apačioje. Dažnos operacijos bus vienu paspaudimu.</span></li>
       <li><span class="ic">↔</span><span>Mėnesius keisk perbraukdamas pirštu arba paspaudęs mėnesio pavadinimą.</span></li>
-      <li><span class="ic">!</span><span>Pranešimus apie biudžetą ir didelius mokėjimus įjungsi skiltyje Daugiau → Paskyra ir programėlė.</span></li>
+      <li><span class="ic">!</span><span>Pranešimus apie biudžetą ir didelius mokėjimus įjungsi skiltyje Daugiau → Profilis.</span></li>
       ${standalone ? "" : `<li><span class="ic">⇩</span><span>${/iphone|ipad|ipod/i.test(navigator.userAgent) ? "Safari: Bendrinti → Į pradžios ekraną, kad programėlė atsidarytų kaip aplikacija." : "Naršyklės meniu pasirink „Įdiegti programą“, kad ji atsidarytų kaip aplikacija."}</span></li>`}
     </ul>
     <div class="row"><button class="btn" id="obDone" style="flex:1">Pradėti</button></div></div>`;

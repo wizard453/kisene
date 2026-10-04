@@ -103,7 +103,7 @@ function moreItems() {
       ["help", "Pagalba ir pamokos", "Kaip kas veikia, biudžeto metodai", "book", "c3"]]},
     {group: "Nustatymai", items: [
       ["look", "Išvaizda", "Spalvos, tema, išdėstymas", "palette", "c12"],
-      ["app", "Paskyra ir programėlė", S.user?.email || "", "user", "c9"]]}
+      ["app", "Profilis", S.user?.email || "", "user", "c9"]]}
   ];
 }
 function vMore() {

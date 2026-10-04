@@ -250,7 +250,7 @@ async function vImport() {
   <div class="set-group"><div class="fine">Eksportuok išrašą CSV formatu iš savo banko interneto banko ir įkelk čia. Swedbank ir Revolut formatai atpažįstami automatiškai, kitiems bankams stulpelius gali priskirti pats. Tą patį failą įkėlus dar kartą, dublikatų nebus.</div>
     <label class="field">Kurios sąskaitos išrašas<select id="impAcc">${accOptions(imp?.account_id || "main")}</select></label>
     <div class="row"><label class="btn ghost small" for="bankFile" style="cursor:pointer">Pasirinkti CSV failą</label><input type="file" id="bankFile" accept=".csv,text/csv,.txt" hidden>${imp ? `<span class="fine">${esc(imp.name)} · ${imp.preset === "swedbank" ? "Swedbank formatas" : imp.preset === "revolut" ? "Revolut formatas" : "bendras formatas"}</span>` : ""}</div>
-    ${!(S.cfg.prefs?.ownName) ? `<div class="hint">Patarimas: skiltyje <button class="linkbtn" data-sub="app">Paskyra ir programėlė</button> įrašyk savo vardą ir pavardę, tada pervedimai sau į kitus bankus bus atpažinti automatiškai.</div>` : ""}
+    ${!(S.cfg.prefs?.ownName) ? `<div class="hint">Patarimas: skiltyje <button class="linkbtn" data-sub="app">Profilis</button> įrašyk savo vardą ir pavardę, tada pervedimai sau į kitus bankus bus atpažinti automatiškai.</div>` : ""}
   </div>`;
   if (!imp) return body + vImportsList("bank");
   const {cands, skipped, balances} = await bankCandidates(imp);

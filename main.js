@@ -31,26 +31,42 @@ function authError(e) {
   return e && e.message ? e.message : "Įvyko klaida. Bandyk dar kartą.";
 }
 
-/* ---------- Paskyra ir programėlė ---------- */
+/* ---------- Profilis ---------- */
 function vApp() {
   const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const c = S.confirm;
-  return `${subHead("Paskyra ir programėlė")}
-  <div class="set-group"><h3>Paskyra</h3>
-    <div class="fine">Prisijungta kaip <b>${esc(S.user?.email || "")}</b>. Prisijunk ta pačia paskyra kitame įrenginyje, ir duomenys bus tie patys.</div>
-    <div class="row">${c === "logout"
-      ? `${S.outbox.length ? `<span class="err">Dar neišsiųsta pakeitimų: ${S.outbox.length}. Atsijungus jie dings.</span>` : ""}<button class="btn danger small" id="logoutYes">Atsijungti</button><button class="btn ghost small" data-confirm="">Atšaukti</button>`
-      : `<button class="btn ghost small" data-confirm="logout">Atsijungti</button>`}</div>
+  const c = S.confirm, u = S.user || {};
+  const name = S.cfg.prefs?.ownName || "";
+  const initials = (name || u.email || "?").split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("");
+  const since = u.created_at ? new Date(u.created_at) : null;
+  const sinceTxt = since ? `${since.getFullYear()} m. ${MONTHS_GEN[since.getMonth()]} ${since.getDate()} d.` : "";
+  const nImp = (S.cfg.prefs?.imports || []).length;
+  const stat = (v, l) => `<div class="pstat"><b class="num">${v}</b><span>${l}</span></div>`;
+  const pw = S.pw || {};
+  return `${subHead("Profilis")}
+  <section class="card pcard">
+    <div class="phead"><div class="pavatar">${esc(initials)}</div>
+      <div class="pid"><b>${esc(name || "Vardas nenurodytas")}</b><span>${esc(u.email || "")}</span>${sinceTxt ? `<small>Narys nuo ${sinceTxt}</small>` : ""}</div></div>
+    <div class="pstats">${stat(S.txs.size, "operacijos")}${stat(S.inv.size, "investicijos")}${stat(accounts().length, "sąskaitos")}${stat(nImp, "įkelti failai")}</div>
+    ${S.partner ? `<button class="tx plink" data-sub="together"><span class="dot" style="background:var(--c5)">${icon("heart", 16)}</span><div><div class="t1">Susieta su ${esc(partnerName())}</div><div class="t2">Bendra paskyra</div></div><span class="chev">›</span></button>` : ""}
+  </section>
+  <div class="set-group"><h3>Asmeninė informacija</h3>
+    <label class="field">Vardas ir pavardė, kaip rodoma banko išraše<input id="ownName" value="${esc(name)}" placeholder="pvz. Vardenis Pavardenis" autocomplete="name"></label>
+    <div class="fine">Naudojama importuojant: pervedimai tau pačiam į kitus bankus atpažįstami kaip pervedimai, o ne išlaidos.</div>
+    <label class="field">El. paštas<input value="${esc(u.email || "")}" disabled></label>
+  </div>
+  <div class="set-group"><h3>Slaptažodis</h3>
+    ${pw.open ? `<form id="pwForm" class="pwform">
+      <label class="field">Naujas slaptažodis<input type="password" name="p1" autocomplete="new-password" minlength="6" required></label>
+      <label class="field">Pakartok slaptažodį<input type="password" name="p2" autocomplete="new-password" minlength="6" required></label>
+      ${pw.err ? `<div class="err">${esc(pw.err)}</div>` : ""}
+      <div class="row"><button class="btn small" ${pw.busy ? "disabled" : ""}>${pw.busy ? "Keičiama…" : "Išsaugoti"}</button><button type="button" class="btn ghost small" id="pwCancel">Atšaukti</button></div></form>`
+    : `<div class="row"><button class="btn ghost small" id="pwOpen">Keisti slaptažodį</button></div>`}
   </div>
   <div class="set-group"><h3>Pranešimai</h3>
     <div class="fine">Įspėjimai apie biudžeto ribas, neįprastai dideles išlaidas, artėjančius mokėjimus ir mėnesio suvestinę. Jie visada matomi varpelyje viršuje, o įjungus ateina ir kaip telefono pranešimai.</div>
-    <div class="fine">${/iphone|ipad|ipod/i.test(navigator.userAgent) ? "iPhone pranešimai veikia tik įdiegtoje programėlėje (Į pradžios ekraną). " : ""}Pranešimai tikrinami, kai programėlė atidaroma ar atnaujinami duomenys.</div>
+    <div class="fine">${ios ? "iPhone pranešimai veikia tik įdiegtoje programėlėje (Į pradžios ekraną). " : ""}Pranešimai tikrinami, kai programėlė atidaroma ar atnaujinami duomenys.</div>
     <div class="row">${nState().on && "Notification" in window && Notification.permission === "granted" ? `<span class="pill on">Įjungta</span><button class="btn ghost small" id="notifyOff">Išjungti</button>` : `<button class="btn small" id="notifyOn">Įjungti telefono pranešimus</button>`}</div>
-  </div>
-  <div class="set-group"><h3>Tavo vardas</h3>
-    <label class="field">Vardas ir pavardė, kaip rodoma banko išraše<input id="ownName" value="${esc(S.cfg.prefs?.ownName || "")}" placeholder="pvz. Vardenis Pavardenis" autocomplete="name"></label>
-    <div class="fine">Naudojama tik importuojant: pervedimai tau pačiam į kitus bankus atpažįstami kaip pervedimai, o ne išlaidos.</div>
   </div>
   ${!standalone ? `<div class="set-group"><h3>Įdiegti telefone</h3>
     ${S.installEvt ? `<div class="fine">Įdiek programėlę, kad ji atsidarytų kaip atskira aplikacija su savo ikona.</div><div class="row"><button class="btn small" id="installBtn">Įdiegti</button></div>`
@@ -64,7 +80,70 @@ function vApp() {
     ${S.demoDismissed && !S.txs.size ? `<button class="linkbtn" id="showDemo" style="align-self:flex-start">Rodyti pavyzdinius duomenis</button>` : ""}
     <button class="linkbtn" id="runOnboard" style="align-self:flex-start">Paleisti pradžios vedlį iš naujo</button>
     <button class="linkbtn" id="runTour" style="align-self:flex-start">Parodyti mokomąjį turą</button>
+  </div>
+  <div class="set-group"><h3>Prisijungimas</h3>
+    <div class="fine">Prisijunk ta pačia paskyra kitame įrenginyje, ir duomenys bus tie patys.</div>
+    <div class="row">${c === "logout"
+      ? `${S.outbox.length ? `<span class="err">Dar neišsiųsta pakeitimų: ${S.outbox.length}. Atsijungus jie dings.</span>` : ""}<button class="btn danger small" id="logoutYes">Atsijungti</button><button class="btn ghost small" data-confirm="">Atšaukti</button>`
+      : `<button class="btn ghost small" data-confirm="logout">Atsijungti</button>`}</div>
+  </div>
+  <div class="set-group danger-zone"><h3>Pavojinga zona</h3>
+    <div class="dz-item"><div><b>Atstatyti programėlę</b><div class="fine">Ištrinamos visos operacijos, investicijos, įkelti failai, biudžetai, tikslai, sąskaitos ir nustatymai. Paskyra lieka, o programėlė vėl rodo nulius. Atšaukti negalima.</div></div>
+      ${c === "reset" ? confirmWord("resetYes", "Atstatyti viską") : `<button class="btn ghost small dz-btn" data-confirm="reset">Atstatyti programėlę</button>`}</div>
+    <div class="dz-item"><div><b>Ištrinti profilį</b><div class="fine">Paskyra ir visi jos duomenys ištrinami visam laikui. Jei susieta su partneriu, ryšys nutraukiamas. Šiuo el. paštu vėliau galėsi užsiregistruoti iš naujo.</div></div>
+      ${c === "delacc" ? confirmWord("delAccYes", "Ištrinti profilį") : `<button class="btn danger small dz-btn" data-confirm="delacc">Ištrinti profilį</button>`}</div>
+    ${S.dzErr ? `<div class="err">${esc(S.dzErr)}</div>` : ""}
   </div>`;
+}
+// Negrįžtamiems veiksmams reikia įrašyti žodį, kad nebūtų paspausta netyčia
+const CONFIRM_WORD = "TRINTI";
+function confirmWord(id, label) {
+  return `<div class="dz-confirm"><label class="field">Patvirtinimui įrašyk <b>${CONFIRM_WORD}</b><input id="dzWord" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+    <div class="row"><button class="btn danger small" id="${id}" disabled>${S.dzBusy ? "Vykdoma…" : label}</button><button class="btn ghost small" data-confirm="">Atšaukti</button></div></div>`;
+}
+const PROFILE_FIELDS = ["budgets", "categories", "rules", "accounts", "recurring", "goals", "assets", "prefs"];
+// Visų duomenų ištrynimas serveryje. Pirmiausia per serverio funkciją, o jei jos dar nėra, tiesiogiai iš lentelių.
+async function serverReset() {
+  const {error} = await sb.rpc("reset_my_data");
+  if (!error) return;
+  if (!/reset_my_data|PGRST202|404/i.test(error.message + error.code)) throw error;
+  const uid = S.user.id;
+  for (const t of ["transactions", "inv_tx", "settings"]) {
+    const r = await sb.from(t).delete().eq("user_id", uid); if (r.error) throw r.error;
+  }
+  await sb.from("shared_goal_entries").delete().eq("user_id", uid).then(() => {}, () => {});
+}
+async function resetApp() {
+  S.dzBusy = true; S.dzErr = ""; render();
+  try {
+    if (!S.demo || S.txs.size || S.inv.size) { S.outbox = []; await serverReset(); }
+    S.txs = new Map(); S.inv = new Map(); S.outbox = [];
+    const theme = S.cfg.prefs?.theme;
+    S.cfg = blankCfg(); S.cfg.prefs = {onboarded: true, tourDone: true, budHistV: 2, budgetHist: [{from: BUD0, b: {}}], ...(theme ? {theme} : {})};
+    S.demoDismissed = true;
+    try { localStorage.removeItem("kisene.market." + S.user.id); } catch (e) {}
+    enqueue({kind: "settings", fields: [...PROFILE_FIELDS, "demo_dismissed"]});
+    S.dzBusy = false; S.confirm = null; resetAI(); refreshDemo();
+    S.tab = "overview"; S.sub = null; S.ym = ymOf(todayISO());
+    render(); window.scrollTo(0, 0); toast("Programėlė atstatyta");
+  } catch (e) {
+    S.dzBusy = false; S.dzErr = "Nepavyko ištrinti duomenų: " + (e.message || e) + ". Patikrink interneto ryšį ir bandyk dar kartą."; render();
+  }
+}
+async function deleteAccount() {
+  S.dzBusy = true; S.dzErr = ""; render();
+  const {error} = await sb.rpc("delete_my_account");
+  if (error) {
+    S.dzBusy = false;
+    S.dzErr = /delete_my_account|PGRST202|404/i.test(error.message + error.code)
+      ? "Profilio trynimas dar neįjungtas serveryje: Supabase SQL editor reikia paleisti profilio SQL kodą."
+      : "Nepavyko ištrinti profilio: " + error.message;
+    render(); return;
+  }
+  S.outbox = []; S.dzBusy = false; S.confirm = null;
+  try { localStorage.removeItem(cacheKey()); } catch (e) {}
+  await signOut();
+  toast("Profilis ištrintas");
 }
 function maybeOnboard() {
   if (S.obShown || S.ob || S.cfg.prefs?.onboarded || S.txs.size || S.inv.size) return;
@@ -354,6 +433,10 @@ document.addEventListener("click", async e => {
     case "wipeYes": S.txs.clear(); S.confirm = null; enqueue({kind: "wipe", table: "transactions"}); refreshDemo(); render(); toast("Biudžeto operacijos ištrintos"); break;
     case "wipeInvYes": S.inv.clear(); S.confirm = null; enqueue({kind: "wipe", table: "inv_tx"}); render(); toast("Investicijų operacijos ištrintos"); break;
     case "logoutYes": await signOut(); break;
+    case "resetYes": resetApp(); break;
+    case "delAccYes": deleteAccount(); break;
+    case "pwOpen": S.pw = {open: true}; render(); break;
+    case "pwCancel": S.pw = null; render(); break;
     case "installBtn": if (S.installEvt) { S.installEvt.prompt(); await S.installEvt.userChoice.catch(() => {}); S.installEvt = null; render(); } break;
     case "forgot": {
       const email = $("#aEmail").value.trim();
@@ -372,6 +455,15 @@ document.addEventListener("submit", async e => {
   const f = e.target; if (f.closest("#sheetRoot")) return;
   e.preventDefault();
   if (f.id === "mktForm") { $("#mktQ")?.blur(); marketSearch($("#mktQ").value); return; }
+  if (f.id === "pwForm") {
+    const p1 = f.querySelector('[name="p1"]').value, p2 = f.querySelector('[name="p2"]').value;
+    if (p1.length < 6) { S.pw = {open: true, err: "Slaptažodis turi būti bent 6 simbolių."}; render(); return; }
+    if (p1 !== p2) { S.pw = {open: true, err: "Slaptažodžiai nesutampa."}; render(); return; }
+    S.pw = {open: true, busy: true}; render();
+    const {error} = await sb.auth.updateUser({password: p1});
+    if (error) { S.pw = {open: true, err: "Nepavyko pakeisti: " + error.message}; render(); return; }
+    S.pw = null; render(); toast("Slaptažodis pakeistas"); return;
+  }
   if (f.id === "chatForm") { const i = $("#chatIn"); const q = i.value.trim(); if (q) { i.value = ""; sendChat(q); } return; }
   if (f.dataset.goalform) { goalAdd(f.dataset.goalform, parseNum(f.amt.value) || 0); return; }
   if (f.id === "obForm1") { obSaveStep1(); render(); window.scrollTo(0, 0); return; }
@@ -437,6 +529,7 @@ document.addEventListener("input", e => {
     ensureCfg("categories"); S.cfg.categories = S.cfg.categories.map(c => c.id === id ? {...c, name: val.slice(0, 40)} : c);
     saveSettings("categories", 800); return;
   }
+  if (el.id === "dzWord") { const b = $("#resetYes") || $("#delAccYes"); if (b) b.disabled = el.value.trim().toUpperCase() !== CONFIRM_WORD || !!S.dzBusy; return; }
   if (el.id === "ownName") { S.cfg.prefs = {...(S.cfg.prefs || {}), ownName: el.value.trim()}; saveSettings("prefs", 800); }
 });
 document.addEventListener("change", async e => {

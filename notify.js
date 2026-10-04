@@ -91,7 +91,7 @@ function openAlerts() {
     <div class="grab"></div><h3 class="sheet-h">Pranešimai</h3>
     ${list.length ? `<ul class="notes">${list.map((x, i) => `<li class="${x.lvl === "crit" ? "crit" : x.lvl === "warn" ? "warn" : ""} ${st.seen.includes(x.key) ? "" : "unread"}"><button class="nbtn" data-al="${i}"><span class="ic">${x.lvl === "info" ? "i" : "!"}</span><span><b>${esc(x.title)}</b><br>${esc(x.body)}</span></button></li>`).join("")}</ul>`
       : `<div class="empty">Naujų pranešimų nėra.</div>`}
-    ${!st.on ? `<div class="hint">Gali gauti šiuos pranešimus ir telefone: Daugiau → Paskyra ir programėlė → Pranešimai.</div>` : ""}
+    ${!st.on ? `<div class="hint">Gali gauti šiuos pranešimus ir telefone: Daugiau → Profilis → Pranešimai.</div>` : ""}
     <button class="btn ghost" id="alClose">Uždaryti</button></div></div>`;
   st.seen = [...new Set([...st.seen, ...list.map(x => x.key)])]; nSave(st); checkAlerts();
   $("#sheetBg").onclick = e => { if (e.target.id === "sheetBg") close(); };
