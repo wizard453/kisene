@@ -204,14 +204,15 @@ function resetAI() { if (S.ai.ctrl) S.ai.ctrl.abort(); S.ai = {status: "idle", c
 const SUGGEST = ["Išanalizuok šį mėnesį", "Kur galėčiau sutaupyti?", "Nustatyk biudžetus pagal mano vidurkį", "Kiek per mėnesį išleidžiu kavinėms?", "Kokios mano prenumeratos?", "Sukurk tikslą atostogoms 1500 € iki birželio"];
 
 // Atsakymas ateina dalimis (srautu), todėl tekstas rodomas iškart, o ne po visos užklausos
-async function callAI(messages, onText) {
+async function callAI(messages, onText, opts) {
+  opts = opts || {};
   const {data} = await sb.auth.getSession();
   const token = data.session && data.session.access_token;
   if (!token) throw {message: "Sesija baigėsi. Prisijunk iš naujo."};
   const res = await fetch(CFG.SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/ai-advisor", {
-    method: "POST", signal: S.ai.ctrl?.signal,
+    method: "POST", signal: opts.signal || S.ai.ctrl?.signal,
     headers: {"Content-Type": "application/json", Authorization: "Bearer " + token, apikey: CFG.SUPABASE_ANON_KEY},
-    body: JSON.stringify({messages, context: aiContext(), stream: true})
+    body: JSON.stringify({messages, context: opts.context || aiContext(), stream: true, ...(opts.tools === false ? {tools: false} : {})})
   });
   if (!res.ok) {
     let msg = "AI paslauga nepasiekiama (" + res.status + ").";

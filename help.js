@@ -160,6 +160,9 @@ const LESSONS = [
 
 /* ---------- Kaip veikia programėlė ---------- */
 const HELP_FAQ = [
+  ["Kaip atsisiųsti išrašą iš banko?", () => `<p>Programėlė priima CSV, Excel (.xlsx) ir XML (ISO 20022, camt.053) išrašus. PDF netinka. Patogiausia išrašą atsisiųsti kompiuteryje.</p>
+    ${BANK_GUIDES.map(b => `<p><b>${esc(b.n)}</b> · ${esc(b.f)}</p><ol>${b.steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>`).join("")}
+    <p>Bankai kartais pakeičia meniu pavadinimus. Jei nerandi, ieškok „Sąskaitos išrašas“. Failą įkelk skiltyje Daugiau → Banko išrašo importas.</p>`],
   ["Kas yra „Laisvi pinigai“?", `<p>Pagrindinė Apžvalgos kortelė rodo, kiek dar gali išleisti ar atsidėti iki mėnesio pabaigos.</p><p>Skaičiuojama taip: šio mėnesio pajamos atėmus tai, kas jau išleista, mokėjimus, kurie dar laukia (nuoma, lizingas, prenumeratos), investavimą ir paskolų įmokas. Kol atlyginimas dar negautas, gali būti naudojamas paskutinių 3 mėnesių pajamų vidurkis. Tai galima išjungti skiltyje Išvaizda.</p>`],
   ["Kaip įvesti operacijas?", `<p>Yra du būdai:</p><ul><li>Pliuso mygtukas apačioje: įrašai išlaidas, pajamas ar pervedimą ranka. Patogu grynųjų pinigų išlaidoms.</li><li>Banko išrašo importas (Daugiau → Banko išrašo importas): kartą per mėnesį įkeli CSV failą iš banko, ir programėlė pati sukuria visas operacijas.</li></ul><p>Tą patį išrašą įkėlus kelis kartus, operacijos nesidubliuoja.</p>`],
   ["Kaip programėlė parenka kategorijas?", `<p>Pagal parduotuvės ar gavėjo pavadinimą, pvz. „Maxima“ yra maistas, „Bolt“ yra transportas. Jei kategorija neatpažinta, operacija patenka į „Be kategorijos“.</p><p>Kai pakeiti operacijos kategoriją, programėlė pasiūlo įsiminti taisyklę, ir kitą kartą tokia operacija bus priskirta automatiškai. Taisykles gali peržiūrėti skiltyje Kategorijos ir taisyklės.</p>`],
@@ -202,7 +205,7 @@ function vHelp() {
   <div class="sec-h" style="margin-top:6px"><h2>Pamokos</h2><span class="aside">${LESSONS.length} metodai</span></div>
   <div class="lessons">${LESSONS.map(x => `<button class="lesson" data-lesson="${x.id}"><span class="l-ic" style="background:var(--${x.col})">${icon(x.ic, 18)}</span><b>${esc(x.t)}</b><small>${esc(x.short)}</small></button>`).join("")}</div>
   <div class="sec-h" style="margin-top:6px"><h2>Kaip veikia programėlė</h2></div>
-  <div class="faq">${HELP_FAQ.map(([q, a]) => `<details><summary>${esc(q)}</summary><div class="fa">${a}</div></details>`).join("")}</div>
+  <div class="faq">${HELP_FAQ.map(([q, a]) => `<details><summary>${esc(q)}</summary><div class="fa">${typeof a === "function" ? a() : a}</div></details>`).join("")}</div>
   <div class="sec-h" style="margin-top:6px"><h2>Sąvokų žodynėlis</h2></div>
   <div class="faq gloss">${GLOSSARY.map(([k, v]) => `<div><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("")}</div>`;
 }

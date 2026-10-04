@@ -103,11 +103,11 @@ document.addEventListener("click", e => {
     const isInv = key.startsWith("legacy:inv:") || meta?.kind === "inv";
     const acc = meta?.account_id || (key.startsWith("legacy:bank:") ? key.split(":")[2] : null);
     const inp = document.createElement("input");
-    inp.type = "file"; inp.accept = ".csv,text/csv,.txt"; inp.style.display = "none"; document.body.appendChild(inp);
+    inp.type = "file"; inp.accept = isInv ? ".csv,text/csv,.txt" : BANK_ACCEPT; inp.style.display = "none"; document.body.appendChild(inp);
     inp.onchange = async () => {
       const f = inp.files[0]; inp.remove(); if (!f) return;
-      const text = await readFileText(f);
-      const imp = isInv ? invSetup(f.name, text) : bankSetup(f.name, text);
+      const imp = isInv ? invSetup(f.name, await readFileText(f)) : await bankSetupFile(f);
+      if (imp === undefined) return;
       if (!imp) { toast("Faile nerasta eilučių"); return; }
       deleteImport(key);
       if (isInv) { S.invImp = imp; S.sub = "invimport"; if (S.tab !== "more") S.tab = "invest"; }

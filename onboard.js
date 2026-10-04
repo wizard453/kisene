@@ -44,8 +44,9 @@ function vOnboard() {
   if (o.step === 2) return `${head}
   <div class="ob"><h2>Įkelk banko išrašą</h2>
     <p class="fine">Programėlė suskirstys operacijas į kategorijas, atpažins pervedimus tarp tavo sąskaitų ir nustatys likutį. Rekomenduojama įkelti bent 3 paskutinių mėnesių išrašą, tada bus galima pasiūlyti biudžetus.</p>
-    <div class="set-group"><div class="fine">${esc(accName("main"))} interneto banke rask „Sąskaitos išrašas“, pasirink laikotarpį ir formatą CSV.</div>
-      <div class="row"><label class="btn" for="obFile" style="cursor:pointer">Pasirinkti CSV failą</label><input type="file" id="obFile" accept=".csv,text/csv,.txt" hidden><button class="btn ghost" id="obNext2">Vėliau</button></div></div>
+    <div class="set-group"><div class="fine">${esc(accName("main"))} interneto banke rask „Sąskaitos išrašas“, pasirink laikotarpį ir formatą CSV, Excel arba XML.</div>
+      <div class="row"><label class="btn" for="obFile" style="cursor:pointer">Pasirinkti išrašo failą</label><input type="file" id="obFile" accept="${BANK_ACCEPT}" hidden><button class="btn ghost" id="obNext2">Vėliau</button></div>
+      ${vBankGuide(false)}</div>
     <button class="linkbtn" id="obBack" style="align-self:flex-start">‹ Atgal</button></div>`;
   if (o.step === 3) {
     const sug = suggestBudgets();

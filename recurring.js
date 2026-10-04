@@ -7,7 +7,10 @@
 
 const recMode = r => r.mode || (accById(r.account_id)?.kind === "cash" ? "auto" : "plan");
 const normKey = s => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
-const recKind = t => t.type === "trf" ? (isLoanAcc(t.to_account_id) ? "loan" : isInvestAcc(t.to_account_id) ? "invest" : null) : t.type;
+// Pasikartojančiais laikomi ir reguliarūs pervedimai į taupymą (taupomąją ar kitą savo sąskaitą, ne grynuosius)
+const recKind = t => t.type === "trf" ? (isLoanAcc(t.to_account_id) ? "loan" : isInvestAcc(t.to_account_id) ? "invest"
+  : accById(t.to_account_id)?.kind === "savings" || (!t.to_account_id && /taup|saving|santaup/i.test((t.note || "") + " " + (t.memo || ""))) ? "save" : null) : t.type;
+const trfLabel = id => isLoanAcc(id) ? "Paskolos įmoka" : isInvestAcc(id) ? "Investavimas" : "Taupymas";
 
 // Ar operacija atitinka pasikartojantį mokėjimą
 function recMatches(r, t) {
@@ -30,46 +33,83 @@ function recPaid(r, ym) {
 
 /* ---------- Atpažinimas iš operacijų ---------- */
 const recMedian = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-function detectRecurring(accountId) {
-  const since = addMonths(ymOf(todayISO()), -6) + "-01";
+// Pavadinimo šaknis grupavimui: be skaičių, skyrybos ir diakritikų
+const recRoot = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+// Operacijos sugrupuojamos pagal vietą. „Telia“ ir „Telia Lietuva“ sujungiamos, nes viena yra kitos pradžia.
+function recGroups(accountId, months) {
+  const since = addMonths(ymOf(todayISO()), -(months || 6)) + "-01";
   const groups = new Map();
   for (const t of S.txs.values()) {
     if (t.date < since || t.recurring_id || !t.note) continue;
-    if (accountId && t.account_id !== accountId) continue;
+    if (accountId && t.account_id !== accountId && !(t.type === "trf" && t.to_account_id === accountId)) continue;
     const kind = recKind(t); if (!kind) continue;
-    const key = kind + "|" + (t.type === "trf" ? t.to_account_id + "|" : "") + normKey(t.note);
-    const g = groups.get(key) || {key, kind, type: t.type, note: t.note, cat: t.cat, account_id: t.account_id, to_account_id: t.to_account_id, txs: []};
+    const root = recRoot(t.note); if (!root) continue;
+    const key = kind + "|" + (t.type === "trf" ? t.to_account_id + "|" : "") + root;
+    const g = groups.get(key) || {key, root, kind, type: t.type, note: t.note, cat: t.cat, account_id: t.account_id, to_account_id: t.to_account_id, txs: []};
     g.txs.push(t); groups.set(key, g);
   }
-  const out = [];
-  for (const g of groups.values()) {
+  const list = [...groups.values()].sort((a, b) => a.root.length - b.root.length);
+  for (const g of list) {
+    if (!g.txs.length) continue;
+    for (const h of list) {
+      if (h === g || !h.txs.length || h.kind !== g.kind || h.to_account_id !== g.to_account_id) continue;
+      if (h.root.startsWith(g.root + " ") && g.root.length >= 4) { g.txs.push(...h.txs); h.txs = []; }
+    }
+  }
+  return list.filter(g => g.txs.length).map(g => {
     const txs = g.txs.sort((a, b) => a.date.localeCompare(b.date));
     const amts = txs.map(t => t.amount), med = recMedian(amts);
-    const same = amts.filter(a => Math.abs(a - med) <= Math.max(1, med * 0.1)).length;
-    const months = new Set(txs.map(t => ymOf(t.date)));
-    let monthlyGaps = 0;
-    for (let i = 1; i < txs.length; i++) { const d = (Date.parse(txs[i].date) - Date.parse(txs[i - 1].date)) / 86400000; if (d >= 24 && d <= 37) monthlyGaps++; }
-    const spread = (Math.max(...amts) - Math.min(...amts)) / (med || 1);
-    // bent du kartai maždaug kas mėnesį, ne daugiau kaip ~1 kartas per mėnesį
-    const perMonth = txs.length / Math.max(1, months.size);
-    // kasdienės kategorijos (maistas, degalai, kavinės) laikomos pasikartojančiomis tik jei suma tiksliai ta pati bent 3 mėnesius
-    const billLike = g.type !== "exp" || ["home", "subs", "loan", "insurance", "health"].includes(g.cat) || catById(g.cat).type === "exp" && !["food", "cafe", "transport", "shop", "fun", "travel", "other"].includes(g.cat);
-    const exact = amts.filter(a => Math.abs(a - med) <= Math.max(0.5, med * 0.03)).length >= Math.ceil(txs.length * 0.8);
+    const last = txs[txs.length - 1];
+    // dažniausias pavadinimas
+    const names = {}; for (const t of txs) names[t.note] = (names[t.note] || 0) + 1;
+    const cats = {}; for (const t of txs) cats[t.cat] = (cats[t.cat] || 0) + 1;
+    return {...g, txs, note: Object.entries(names).sort((a, b) => b[1] - a[1])[0][0], cat: Object.entries(cats).sort((a, b) => b[1] - a[1])[0][0],
+      amts, med, last, months: new Set(txs.map(t => ymOf(t.date)))};
+  });
+}
+function recCand(g, strong) {
+  const spread = (Math.max(...g.amts) - Math.min(...g.amts)) / (g.med || 1);
+  return {key: g.key, type: g.type, note: g.note, cat: g.cat, account_id: g.last.account_id, to_account_id: g.to_account_id,
+    amount: r2(g.txs.slice(-3).reduce((s, t) => s + t.amount, 0) / Math.min(3, g.txs.length)), day: Math.min(28, +g.last.date.slice(8)),
+    variable: spread > 0.1, count: g.txs.length, months: g.months.size, last: g.last.date, strong};
+}
+const BILL_CATS = ["home", "subs", "loan", "insurance"];
+const EVERYDAY_CATS = ["food", "cafe", "transport", "shop", "travel"];
+function detectRecurring(accountId) {
+  const out = [];
+  for (const g of recGroups(accountId, 6)) {
+    const {txs, amts, med, months} = g;
+    if (txs.length < 1) continue;
     const gaps = []; for (let i = 1; i < txs.length; i++) gaps.push((Date.parse(txs[i].date) - Date.parse(txs[i - 1].date)) / 86400000);
     const medGap = recMedian(gaps);
-    // kas mėnesį: tipinis tarpas ~mėnuo arba po vieną kartą skirtingais mėnesiais (mokėjimo diena gali svyruoti tarp mėnesio pradžios ir pabaigos)
-    const regular = txs.length >= 2 && ((medGap >= 20 && medGap <= 40) || (months.size >= 2 && perMonth <= 1.2) || (months.size >= 2 && txs.length <= months.size * 2 && monthlyGaps >= Math.floor(txs.length / 2)));
-    const strong = regular && (billLike ? (same >= Math.ceil(txs.length * 0.6) || spread <= 0.6) : exact && months.size >= 3);
-    // prenumerata, matyta tik kartą: pasiūlom, bet nepažymim
-    const maybe = !strong && txs.length === 1 && g.type === "exp" && g.cat === "subs";
+    const perMonth = txs.length / Math.max(1, months.size);
+    const monthlyGaps = gaps.filter(d => d >= 24 && d <= 37).length;
+    const spread = (Math.max(...amts) - Math.min(...amts)) / (med || 1);
+    const same = amts.filter(a => Math.abs(a - med) <= Math.max(1, med * 0.1)).length;
+    const exact = amts.filter(a => Math.abs(a - med) <= Math.max(0.5, med * 0.03)).length >= Math.ceil(txs.length * 0.8);
+    const days = txs.map(t => +t.date.slice(8)), dMed = recMedian(days);
+    const sameDay = days.filter(d => Math.min(Math.abs(d - dMed), 31 - Math.abs(d - dMed)) <= 5).length >= Math.ceil(txs.length * 0.7);
+    const billLike = g.type !== "exp" || BILL_CATS.includes(g.cat);
+    // kas mėnesį: tipinis tarpas apie mėnesį arba po vieną kartą skirtingais mėnesiais
+    const regular = months.size >= 2 && perMonth <= 1.5 && ((medGap >= 20 && medGap <= 40) || perMonth <= 1.2 || monthlyGaps >= Math.floor(txs.length / 2));
+    let strong = false, maybe = false;
+    if (regular) {
+      if (billLike) strong = same >= Math.ceil(txs.length * 0.6) || spread <= (g.cat === "home" ? 1.5 : 0.6);
+      // kasdienės kategorijos: ta pati suma maždaug tą pačią mėnesio dieną bent 3 mėnesius (pvz. sporto klubas)
+      else strong = exact && sameDay && perMonth <= 1.2 && months.size >= 3;
+      // pasiūlymas be pažymėjimo, bet ne kasdieniams pirkiniams (maistas, kavinės, transportas, apsipirkimas, kelionės)
+      if (!strong) maybe = perMonth <= 1.2 && (billLike ? (exact || sameDay) : exact && sameDay && !EVERYDAY_CATS.includes(g.cat));
+    }
+    // prenumerata ar sąskaita, matyta tik kartą
+    if (!regular && txs.length === 1 && g.type === "exp" && ["subs", "insurance", "home"].includes(g.cat)) maybe = true;
     if (!strong && !maybe) continue;
-    const last = txs[txs.length - 1];
-    const days = txs.map(t => +t.date.slice(8)).sort((a, b) => a - b);
-    out.push({key: g.key, type: g.type, note: g.note, cat: g.cat, account_id: g.account_id, to_account_id: g.to_account_id,
-      amount: r2(txs.slice(-3).reduce((s, t) => s + t.amount, 0) / Math.min(3, txs.length)), day: Math.min(28, +last.date.slice(8)),
-      variable: spread > 0.1, count: txs.length, last: last.date, strong});
+    out.push(recCand(g, strong));
   }
   return out.sort((a, b) => b.strong - a.strong || b.amount - a.amount);
+}
+// Visos vietos paskutinių 6 mėnesių operacijose: iš jų pasikartojantį mokėjimą galima pasirinkti ranka
+function allRecCandidates(accountId) {
+  return recGroups(accountId, 6).map(g => recCand(g, false)).sort((a, b) => b.months - a.months || b.count - a.count || b.amount - a.amount);
 }
 
 /* ---------- Langas po importo ---------- */
@@ -100,18 +140,32 @@ function prepareRecReview(imported, accountId) {
 function vRecReview() {
   const rv = S.recReview;
   if (!rv) { S.sub = null; return vOverview(); }
-  const label = it => it.type === "trf" ? (isLoanAcc(it.to_account_id) ? "Paskolos įmoka" : "Investavimas") + " → " + accName(it.to_account_id) : catById(it.cat).name;
+  const label = it => it.type === "trf" ? trfLabel(it.to_account_id) + " → " + (it.to_account_id ? accName(it.to_account_id) : "kita savo sąskaita") : catById(it.cat).name;
   const row = (it, i) => `<label class="rrv ${it.checked ? "" : "off"}"><input type="checkbox" data-rrv="${i}" ${it.checked ? "checked" : ""}>
     <span class="rrv-t"><b>${esc(it.note || label(it))}</b><small>${esc(label(it))} · kas mėn. ~${it.day} d.${it.variable ? " · suma kinta" : ""}</small>
-      <small class="rrv-s ${it.stale ? "warn" : it.paid ? "ok" : ""}">${it.existing ? (it.paid ? `✓ Rasta šiame išraše ${dayLabel(it.paid)}${it.amountChanged ? `, suma pasikeitė į ${eur(it.amount)}` : ""}` : it.stale ? (it.lastSeen ? `Nematyta nuo ${dayLabel(it.lastSeen)}. Gal jau baigėsi?` : "Išrašuose nerasta. Gal jau baigėsi?") : "Šiame išraše nerasta") : it.maybe ? "Matyta tik kartą, gali būti prenumerata" : `Nauja · rasta ${it.count} kartus`}</small></span>
+      <small class="rrv-s ${it.stale ? "warn" : it.paid ? "ok" : ""}">${it.existing ? (it.paid ? `✓ Rasta šiame išraše ${dayLabel(it.paid)}${it.amountChanged ? `, suma pasikeitė į ${eur(it.amount)}` : ""}` : it.stale ? (it.lastSeen ? `Nematyta nuo ${dayLabel(it.lastSeen)}. Gal jau baigėsi?` : "Išrašuose nerasta. Gal jau baigėsi?") : "Šiame išraše nerasta") : it.manual ? "Pridėta ranka" : it.maybe ? (it.count > 1 ? `Galimai pasikartojantis · rasta ${it.count} kartus` : "Matyta tik kartą, gali būti prenumerata") : `Nauja · rasta ${it.count} kartus`}</small></span>
     <span class="am num ${it.type === "inc" ? "pos" : ""}">${it.type === "inc" ? "+" : "−"}${eur(it.amount)}</span></label>`;
   const ex = rv.items.map((it, i) => [it, i]).filter(([it]) => it.existing), nw = rv.items.map((it, i) => [it, i]).filter(([it]) => !it.existing);
   return `<div class="subhead"><h2>Pasikartojantys mokėjimai</h2></div>
   <div class="fine" style="margin-top:-4px">Pažymėk mokėjimus, kurie kartojasi kas mėnesį. Jie bus naudojami kortelėje „Laisvi pinigai“ kaip laukiami mokėjimai, kol atsiras kitame išraše. Atžymėk tuos, kurie baigėsi, pvz. išmokėtą lizingą.</div>
   ${nw.length ? `<div class="sec-h"><h2>Rasti nauji</h2><span class="aside">${nw.length}</span></div><div class="rrv-list">${nw.map(([it, i]) => row(it, i)).join("")}</div>` : ""}
   ${ex.length ? `<div class="sec-h"><h2>Jau sekami</h2><span class="aside">${ex.length}</span></div><div class="rrv-list">${ex.map(([it, i]) => row(it, i)).join("")}</div>` : ""}
-  ${!rv.items.length ? `<div class="txs"><div class="empty">Pasikartojančių mokėjimų nerasta. Jų atsiras, kai įkelsi bent dviejų mėnesių išrašus.</div></div>` : ""}
+  ${!rv.items.length ? `<div class="txs"><div class="empty">Automatiškai pasikartojančių mokėjimų nerasta. Gali juos pasirinkti iš sąrašo žemiau.</div></div>` : ""}
+  <section class="card rrv-pick"><div class="sec-h"><h2>Pridėti iš visų operacijų</h2></div>
+    <div class="fine">Jei kurio nors pasikartojančio mokėjimo nerado, surask jį čia ir paspausk „Pridėti“. Sąraše yra visos vietos iš paskutinių 6 mėnesių, dažniausiai pasikartojančios viršuje.</div>
+    <input id="rrvQ" class="rrv-q" type="search" placeholder="Ieškoti, pvz. Telia, nuoma, sporto klubas" value="${esc(rv.q || "")}" autocomplete="off">
+    <div id="rrvPick" class="rrv-list">${vRecPick()}</div></section>
   <div class="row"><button class="btn" id="rrvSave" style="flex:1">Išsaugoti</button><button class="btn ghost" id="rrvSkip">Praleisti</button></div>`;
+}
+function vRecPick() {
+  const rv = S.recReview; if (!rv) return "";
+  rv.all = rv.all || allRecCandidates(rv.accountId);
+  const taken = new Set(rv.items.map(it => it.cand?.key || ""));
+  const q = recRoot(rv.q || "");
+  const list = rv.all.filter(c => !taken.has(c.key) && (!q || recRoot(c.note + " " + catById(c.cat).name).includes(q))).slice(0, q ? 40 : 25);
+  if (!list.length) return `<div class="empty">${q ? "Nieko nerasta." : "Daugiau vietų nėra."}</div>`;
+  return list.map(c => `<div class="rrv add"><span class="rrv-t"><b>${esc(c.note)}</b><small>${esc(c.type === "trf" ? trfLabel(c.to_account_id) : catById(c.cat).name)} · ${c.count} kart. per ${c.months} mėn. · paskutinį kartą ${dayLabel(c.last)}</small></span>
+    <span class="am num ${c.type === "inc" ? "pos" : ""}">${c.type === "inc" ? "+" : "−"}${eur(c.amount)}</span><button class="btn ghost small" data-rrvadd="${esc(c.key)}">Pridėti</button></div>`).join("");
 }
 function saveRecReview() {
   const rv = S.recReview; if (!rv) return;
@@ -133,7 +187,7 @@ function saveRecReview() {
       recs.push({id: shortId(), type: c.type, cat: c.type === "trf" ? "transfer" : c.cat, amount: c.amount, note: c.note, match: normKey(c.note), day: c.day,
         account_id: c.account_id, to_account_id: c.to_account_id || null, start: now, last: now, active: true, mode: "plan", variable: c.variable});
       added++;
-    } else if (!it.maybe) notRec.add(it.cand.key);
+    } else if (!it.maybe && !it.manual) notRec.add(it.cand.key);
   }
   S.cfg.recurring = recs; saveSettings("recurring");
   S.cfg.prefs = {...(S.cfg.prefs || {}), notRecurring: [...notRec].slice(-200)}; saveSettings("prefs");

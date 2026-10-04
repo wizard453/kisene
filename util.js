@@ -35,25 +35,43 @@ const DEFAULT_ACCOUNTS = [
 ];
 const ACCOUNT_KINDS = {bank:"Banko sąskaita", card:"Kortelė", cash:"Grynieji", savings:"Taupomoji", invest:"Investavimo platforma", loan:"Paskola / lizingas"};
 
-// Įmontuotos kategorijų taisyklės (vartotojo taisyklės tikrinamos pirmiau)
+// Įmontuotos kategorijų taisyklės (vartotojo taisyklės tikrinamos pirmiau).
+// Tvarka svarbi: konkretesni pavadinimai tikrinami anksčiau, pvz. „Bolt Food“ prieš „Bolt“.
 const KEYWORDS = [
-  ["transport", /autoaibe|bolt\.eu|bolt\b|uber|circle\s?k|viada|orlen|neste|emsi|baltic petroleum|trafi|judu|parking|unipark|stova|degalin|citybee|spark|taksi/i],
-  ["food", /maxima|rimi|lidl|\biki\b|norfa|\baib[eė]\b|prisma|barbora|šilas|silas|mesyt|mėsin|turgus|kepykl/i],
-  ["cafe", /caffeine|vero cafe|coffee|kavin|restoran|pizza|picer|wolt|hesburger|mcdonald|kfc|burger|kebab|\bbaras\b|\bbaras |greitas baras|greet\.menu|jammi|gogi|sushi|cili|čili|bistro|foodout/i],
-  ["subs", /netflix|spotify|youtube|apple\.com|icloud|google\s?(one|storage|play)|disney|hbo|go3|telia|bit[eė]\b|tele2|adobe|chatgpt|openai|claude|anthropic|patreon|github|microsoft/i],
-  ["health", /vaistin|eurovaist|camelia|gintarin|benu|klinik|odontolog|medical|\bmed\b|optika|labor/i],
-  ["home", /ignitis|enefit|vandenys|šiluma|siluma|miesto gijos|viena sąskaita|viena saskaita|nuoma|bendrija|būsto|busto|elektr|dujos|internetas|cgates|init\b/i],
-  ["fun", /kino|kinas|forum cinemas|arena|steam|playstation|bilietai|tiketa|koncert|sport|gym|impuls|lemon|teatr|muziej/i],
-  ["shop", /ikea|senukai|pigu|varle|varlė|temu|aliexpress|amazon|zara|h&m|lindex|depo|jysk|euronics|topo|ermitažas|ermitazas|decathlon|pepco|action/i],
-  ["travel", /booking\.com|airbnb|kiwi\.com|ryanair|wizz|airbaltic|lot\b|hotel|viešbut|viesbut|flixbus|ltg link|lux express/i],
-  ["loan", /lizing|leasing|paskol|kredit|inbank|mokilizingas|artea lizingas/i],
-  ["insurance", /banko mokestis|paslaugų plano|aptarnavimo mokest|draudim|insurance|ergo|gjensidige|lietuvos draudimas|bta|compensa|vmi\b|sodra|registrų centras|regitra/i]
+  // maisto pristatymas ir kavinės
+  ["cafe", /bolt\.eu\/s\/|bolt food|wolt|foodout|greet\.menu|jammi|hesburger|mcdonald|\bkfc\b|burger king|subway|kebab|pizz|picer|sushi|\bgogi\b|\bcili\b|čili|caffeine|vero caf|coffee|kavin|restoran|bistro|\bbaras\b|starbucks|costa coffee|\bpub\b|talutti|can can|domino|šoko|soko|kepyklėl|cafe\b|kavos/i],
+  // maisto prekės
+  ["food", /maxima|\brimi\b|\blidl\b|\biki\b|norfa|\baib[eė]\b|prisma|barbora|lastmile|\bšilas\b|\bsilas\b|mes[yė]t|mėsin|turgus|kepykl|express market|vynoteka|\bmini\s?maxima\b|ikiukas|aldi|biedronka|\bcoop\b|spar\b|rimi express/i],
+  // degalinės nustatomos atskirai pagal sumą (žr. FUEL_RE)
+  ["transport", /autoaibe|bolt\.eu|\bbolt\b|uber|citybee|spark\b|\bjudu\b|trafi|m\.ticket|mticket|viešasis transport|viesasis transport|autobus|troleibus|stova|unipark|europark|parkuok|flowbird|parking|parkavim|taksi|e-tolling|vinjet|kelių mokest|keliu mokest|autodoc|inter cars|autoplius|padang|automobil|regitra|technin(ė|e) apžiūr|tech\.? apziur/i],
+  ["subs", /netflix|spotify|youtube|apple\.com|icloud|google\s?(one|storage|play)|disney|\bhbo\b|\bmax\.com|go3|telia|\bbit[eė]\b|tele2|pildyk|ezys|adobe|chatgpt|openai|claude\.ai|anthropic|patreon|github|microsoft|dropbox|canva|duolingo|audible|storytel|\bdelfi\b|15min|lrytas|kindle/i],
+  ["health", /vaistin|eurovaist|camelia|gintarin|\bbenu\b|antėja|anteja|klinik|odontolog|dantų|dantu|medical|medicin|\bmed\b|optik|labor|affidea|kardiolita|hila\b|sveikat|poliklinik|ligonin|psicholog|kineziterap|masaž|masaz/i],
+  ["home", /ignitis|enefit|elektrum|\beso\b|vandenys|šiluma|siluma|miesto gijos|energija|viena sąskaita|viena saskaita|nuoma|bendrij|būsto|busto|administrat|elektr|dujos|internetas|cgates|\binit\b|ecoservice|atliek/i],
+  ["fun", /kino|\bkinas\b|forum cinemas|multikino|apollo|arena|steam|playstation|xbox|nintendo|bilietai|tiketa|kakava|koncert|teatr|muziej|lemon gym|impuls|gym\+|\bgym\b|fitness|sport(o)? klub|baseinas|boulin|batut|escape|\bspa\b|vandens parkas|žaidim|zaidim/i],
+  ["shop", /senukai|ermitaž|ermitaz|moki veži|moki vezi|jysk|ikea|depo\b|bauhaus|pigu|varle|varlė|temu|aliexpress|amazon|ebay|shein|zalando|about you|\bzara\b|h&m|\bhm\b|lindex|reserved|sinsay|pepco|action\b|decathlon|sportland|euronics|topo cent|bigbox|elektromarkt|drogas|eurokos|douglas|kika|apranga|mango\b|ccc\b|deichmann|tiger\b|flying tiger|jumbo|vinted|knygos|pegasas|vaga\b|humanitas/i],
+  ["travel", /booking\.com|airbnb|kiwi\.com|ryanair|wizz|airbaltic|\blot\b|lufthansa|finnair|hotel|hostel|viešbut|viesbut|flixbus|ecolines|ltg link|lux express|oro uost|airport|skyscanner|trip\.com|expedia/i],
+  ["loan", /lizing|leasing|paskol|kredit|sąskaita: ?bls|saskaita: ?bls|\bbls\d{6,}|būsto kredit|busto kredit|inbank|mokilizingas|general financing|bigbank|moment credit|\bsavy\b|ferratum|credit24|\bipf\b/i],
+  ["insurance", /banko mokestis|paslaugų plano|paslaugu plano|aptarnavimo mokest|komisin|draudim|insurance|\bergo\b|gjensidige|lietuvos draudimas|\bbta\b|compensa|if p&c|\bif\b draud|vmi\b|sodra|registrų centras|registru centras|savivaldyb|bauda|notar|antstol/i]
 ];
+// Degalinės: dideli pirkiniai yra degalai, maži dažniausiai kava ar užkandžiai
+const FUEL_RE = /circle\s?k|viada|orlen|neste|\bemsi\b|baltic petroleum|lukoil|alauša|alausa|jozita|ventus nafta|skulas|degalin|\bshell\b|\bstatoil\b/i;
+const FUEL_SNACK_MAX = 20;
 const INCOME_KEYWORDS = [
-  ["salary", /du išmokėjimas|darbo užmok|atlyginim|salary|alga\b/i],
+  ["salary", /du išmokėjimas|darbo užmok|darbo uzmok|atlyginim|salary|\balga\b|premij|atostogini/i],
   ["grant", /stipend/i],
-  ["invinc", /dividend|palūkan|interest|trading ?212|revolut securities|lightyear|interactive brokers/i]
+  ["invinc", /dividend|palūkan|palukan|interest|trading ?212|revolut securities|lightyear|interactive brokers|\bibkr\b/i],
+  ["side", /honorar|autorin|sąskait(a|os) faktūr|saskait(a|os) faktur|\bsf\b|vinted|individual(i|ios) veikl/i],
+  ["gift", /grąžin|grazin|refund|kompensac|dovan|gimtadien/i]
 ];
+// Kategorija išlaidoms pagal tekstą ir sumą. sure=false reiškia, kad verta patikrinti.
+function guessExpCat(text, amount) {
+  if (FUEL_RE.test(text) && !/bolt|wolt/i.test(text)) {
+    if (amount != null && amount < FUEL_SNACK_MAX) return {cat: "cafe", sure: false, why: "maža suma degalinėje"};
+    return {cat: "transport", sure: amount != null, why: "degalinė"};
+  }
+  for (const [c, re] of KEYWORDS) if (re.test(text)) return {cat: c, sure: true};
+  return {cat: "other", sure: false};
+}
 
 const fmt = new Intl.NumberFormat("lt-LT", {style:"currency", currency:"EUR"});
 const fmt0 = new Intl.NumberFormat("lt-LT", {style:"currency", currency:"EUR", maximumFractionDigits:0});

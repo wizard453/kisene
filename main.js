@@ -388,6 +388,12 @@ document.addEventListener("click", async e => {
   if (d.delrec) { const prev = S.cfg.recurring || []; S.cfg.recurring = prev.filter(r => r.id !== d.delrec); saveSettings("recurring"); render(); toast("Pasikartojanti operacija pašalinta", () => { S.cfg.recurring = prev; saveSettings("recurring"); render(); }); return; }
   if (d.delgoal) { const prev = S.cfg.goals || []; S.cfg.goals = prev.filter(g => g.id !== d.delgoal); saveSettings("goals"); render(); toast("Tikslas pašalintas", () => { S.cfg.goals = prev; saveSettings("goals"); render(); }); return; }
   if (d.goalsub) { const f = t.closest("form"); goalAdd(d.goalsub, -(parseNum(f.amt.value) || 0)); return; }
+  if (d.rrvadd && S.recReview) {
+    const c = (S.recReview.all || []).find(x => x.key === d.rrvadd); if (!c) return;
+    S.recReview.items.push({id: "new:" + c.key, existing: false, cand: c, note: c.note, type: c.type, cat: c.cat, to_account_id: c.to_account_id, amount: c.amount, day: c.day, count: c.count, variable: c.variable, checked: true, manual: true});
+    render(); toast(`„${c.note}“ pridėta prie pasikartojančių`); return;
+  }
+  if (d.gfilter && S.imp) { S.imp.gfilter = d.gfilter; render(); return; }
   switch (t.id) {
     case "fab": if (S.tab === "invest") openInvSheet(null); else openTxSheet(null); break;
     case "mOpen": openMonthSheet(); break;
@@ -398,6 +404,7 @@ document.addEventListener("click", async e => {
     case "aiClear": S.ai.chat = []; saveChat(); render(); break;
     case "aiStop": if (S.ai.ctrl) S.ai.ctrl.abort(); break;
     case "doImport": doBankImport(); break;
+    case "impAI": aiCheckImport(); break;
     case "impCancel": S.imp = null; if (S.ob) { S.sub = "onboard"; S.ob.step = 2; } render(); break;
     case "addAcc": openAccSheet(null); break;
     case "addLoan": openAccSheet(null, "loan"); break;
@@ -516,6 +523,7 @@ document.addEventListener("submit", async e => {
 const nameTimers = {};
 document.addEventListener("input", e => {
   const el = e.target; if (el.closest("#sheetRoot")) return;
+  if (el.id === "rrvQ" && S.recReview) { S.recReview.q = el.value; const box = $("#rrvPick"); if (box) box.innerHTML = vRecPick(); return; }
   if (el.id === "q") { S.filter.q = el.value; $("#listBody").innerHTML = listBody(); return; }
   if (el.id === "mktQ") { marketSearch(el.value); return; }
   if (el.id === "chatIn") { el.style.height = "auto"; el.style.height = Math.min(120, el.scrollHeight) + "px"; return; }
@@ -535,7 +543,8 @@ document.addEventListener("input", e => {
 document.addEventListener("change", async e => {
   const el = e.target; if (el.closest("#sheetRoot")) return;
   if (el.id === "bankFile" && el.files[0]) {
-    const f = el.files[0]; const imp = bankSetup(f.name, await readFileText(f));
+    const f = el.files[0]; const imp = await bankSetupFile(f); el.value = "";
+    if (imp === undefined) return;
     if (!imp) { toast("Faile nerasta eilučių"); return; }
     imp.account_id = $("#impAcc")?.value || "main"; S.imp = imp; render(); return;
   }
@@ -545,7 +554,7 @@ document.addEventListener("change", async e => {
   if (el.id === "heroAvg") { S.cfg.prefs = {...(S.cfg.prefs || {}), heroAvg: el.checked}; saveSettings("prefs"); return; }
   if (el.id === "obLoan") { const box = $(".ob-loan"); if (box) box.hidden = !el.checked; return; }
   if (el.id === "obFile" && el.files[0]) {
-    const f = el.files[0]; const imp = bankSetup(f.name, await readFileText(f));
+    const f = el.files[0]; const imp = await bankSetupFile(f); if (imp === undefined) return;
     if (!imp) { toast("Faile nerasta eilučių"); return; }
     imp.account_id = "main"; S.imp = imp; S.sub = "import"; render(); window.scrollTo(0, 0); return;
   }
@@ -564,6 +573,7 @@ document.addEventListener("change", async e => {
     return;
   }
   if (el.dataset.choice && S.imp) { bankOverride(el.dataset.choice, el.value); render(); return; }
+  if (el.dataset.gchoice !== undefined && S.imp) { groupOverride(+el.dataset.gchoice, el.value); render(); return; }
   if (el.dataset.reviewsel && el.value) { applyReview(el.dataset.reviewsel, el.value); return; }
   if (el.id === "fAcc") { S.filter.acc = el.value; $("#listBody").innerHTML = listBody(); return; }
 });

@@ -3,20 +3,22 @@
 
 /* ---------- Kategorizavimas ---------- */
 // dir: "out" (pinigai išėjo) arba "in" (atėjo)
-function categorize(text, dir) {
+function categorize(text, dir, amount) {
   const low = String(text || "").toLowerCase();
   for (const r of S.cfg.rules || []) {
     if (!r.pattern || !low.includes(r.pattern)) continue;
     if (r.type === "exp" && dir === "in") continue;
     if (r.type === "inc" && dir === "out") continue;
-    return {type: r.type, cat: r.type === "trf" ? "transfer" : r.cat, to_account_id: r.to_account_id || null, rule: true};
+    if (r.max != null && amount != null && amount > r.max) continue;
+    if (r.min != null && amount != null && amount < r.min) continue;
+    return {type: r.type, cat: r.type === "trf" ? "transfer" : r.cat, to_account_id: r.to_account_id || null, rule: true, sure: true};
   }
   if (dir === "in") {
-    for (const [c, re] of INCOME_KEYWORDS) if (re.test(text)) return {type: "inc", cat: c};
-    return {type: "inc", cat: "iother"};
+    for (const [c, re] of INCOME_KEYWORDS) if (re.test(text)) return {type: "inc", cat: c, sure: true};
+    return {type: "inc", cat: "iother", sure: false};
   }
-  for (const [c, re] of KEYWORDS) if (re.test(text)) return {type: "exp", cat: c};
-  return {type: "exp", cat: "other"};
+  const g = guessExpCat(String(text || ""), amount);
+  return {type: "exp", cat: g.cat, sure: g.sure, why: g.why};
 }
 
 /* ---------- Skaičiavimai ---------- */
@@ -485,7 +487,7 @@ function vCats() {
   ${hidden.length ? `<details><summary>Paslėptos (${hidden.length})</summary><div class="txs">${hidden.map(c => `<button class="tx" data-editcat="${c.id}"><span class="dot" style="background:var(--${c.color});opacity:.5">${catIcon(c)}</span><div><div class="t1">${esc(c.name)}</div></div><span class="chev">›</span></button>`).join("")}</div></details>` : ""}
   <div class="sec-h"><h2>Taisyklės</h2><button class="linkbtn aside" id="addRule">+ Nauja</button></div>
   <div class="fine" style="margin-top:-6px">Taisyklės priskiria kategoriją pagal aprašymą. Jos sukuriamos ir automatiškai, kai pakeiti operacijos kategoriją.</div>
-  ${rules.length ? `<div class="txs">${rules.map(r => `<button class="tx" data-editrule="${esc(r.id)}"><span class="dot" style="background:var(--${r.type === "trf" ? "c9" : catById(r.cat).color})">${r.type === "trf" ? icon("swap") : catIcon(catById(r.cat))}</span><div><div class="t1">„${esc(r.pattern)}“</div><div class="t2">→ ${esc(ruleTarget(r))}</div></div><span class="chev">›</span></button>`).join("")}</div>` : `<div class="txs"><div class="empty">Taisyklių dar nėra.</div></div>`}`;
+  ${rules.length ? `<div class="txs">${rules.map(r => `<button class="tx" data-editrule="${esc(r.id)}"><span class="dot" style="background:var(--${r.type === "trf" ? "c9" : catById(r.cat).color})">${r.type === "trf" ? icon("swap") : catIcon(catById(r.cat))}</span><div><div class="t1">„${esc(r.pattern)}“</div><div class="t2">→ ${esc(ruleTarget(r))}${r.max != null ? ` · kai suma iki ${eur(r.max)}` : r.min != null ? ` · kai suma nuo ${eur(r.min)}` : ""}</div></div><span class="chev">›</span></button>`).join("")}</div>` : `<div class="txs"><div class="empty">Taisyklių dar nėra.</div></div>`}`;
 }
 /* ---------- Sąskaitos ---------- */
 function vAccounts() {
