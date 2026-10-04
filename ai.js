@@ -204,6 +204,16 @@ function resetAI() { if (S.ai.ctrl) S.ai.ctrl.abort(); S.ai = {status: "idle", c
 const SUGGEST = ["Išanalizuok šį mėnesį", "Kur galėčiau sutaupyti?", "Nustatyk biudžetus pagal mano vidurkį", "Kiek per mėnesį išleidžiu kavinėms?", "Kokios mano prenumeratos?", "Sukurk tikslą atostogoms 1500 € iki birželio"];
 
 // Atsakymas ateina dalimis (srautu), todėl tekstas rodomas iškart, o ne po visos užklausos
+// Serverio funkcijos „pažadinimas“: atidarius AI langą funkcija paleidžiama iš anksto, kad pirmas atsakymas nelauktų jos paleidimo
+let warmAt = 0;
+async function warmAI() {
+  if (Date.now() - warmAt < 4 * 60000 || !navigator.onLine || !CFG.SUPABASE_URL) return;
+  warmAt = Date.now();
+  try {
+    const {data} = await sb.auth.getSession(); const token = data.session?.access_token; if (!token) return;
+    fetch(CFG.SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/ai-advisor", {method: "POST", headers: {Authorization: "Bearer " + token, apikey: CFG.SUPABASE_ANON_KEY, "x-warmup": "1"}}).catch(() => {});
+  } catch (e) {}
+}
 async function callAI(messages, onText, opts) {
   opts = opts || {};
   const {data} = await sb.auth.getSession();

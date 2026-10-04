@@ -819,3 +819,7 @@ section.card .txs,section.card .notes li,section.card .kv,section.card .wl{backg
 .dup select{width:100%;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:15px}
 .acc-total{display:flex;justify-content:space-between;align-items:baseline;padding:14px 16px;border-radius:16px;background:var(--accent);color:var(--accent-ink);font-weight:600}
 .acc-total b{font-size:20px;color:var(--gold)}
+.nodate{padding:11px 0;margin:0}
+/* Iššokantys langai: turinys nesuspaudžiamas, todėl langas slenka pats, o fonas tuo metu stovi */
+.sheet>*{flex-shrink:0}
+html.sheet-open,html.sheet-open body{overflow:hidden}

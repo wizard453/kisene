@@ -228,6 +228,7 @@ function viewHtml() {
 }
 async function render(fromData) {
   if (S.loaded && S.cfg) { ensureBudHist(); migrateCats(); }
+  if (S.user && !S.demo && ["ai", "spendtrend", "import", "aicats"].includes(S.sub)) warmAI();
   const signedIn = !!S.user && !S.recovery;
   $("#authScreen").hidden = signedIn; $("#appScreen").hidden = !signedIn; $("#tabs").hidden = !signedIn;
   if (!signedIn) {
@@ -722,3 +723,5 @@ if (sb) {
 setInterval(() => { if (S.user) generateRecurring(); }, 60 * 60 * 1000);
 // „Laisvi pinigai“ laukiamų mokėjimų sąrašas lieka atidarytas po perpiešimo
 document.addEventListener("toggle", e => { if (e.target.classList?.contains("eq-pend")) S.pendOpen = e.target.open; }, true);
+// Kol atidarytas iššokantis langas, už jo esantis puslapis neslenka
+new MutationObserver(() => document.documentElement.classList.toggle("sheet-open", !!$("#sheetRoot")?.children.length)).observe($("#sheetRoot"), {childList: true});

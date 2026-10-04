@@ -428,6 +428,8 @@ function openTxSheet(tx, preset) {
   };
   if (!accById(st.account_id)) st.account_id = activeAccounts()[0]?.id || "main";
   const origCat = tx?.cat;
+  // ar ši operacija jau priklauso pasikartojančiam mokėjimui
+  const linkedRec = isEdit ? (S.cfg.recurring || []).find(r => r.id === tx.recurring_id || (r.active && recMatches(r, tx))) : null;
   const root = $("#sheetRoot");
   const close = () => { root.innerHTML = ""; document.removeEventListener("keydown", onKey); };
   const onKey = e => { if (e.key === "Escape") close(); };
@@ -452,7 +454,9 @@ function openTxSheet(tx, preset) {
         ${isT ? `<label class="field">Į sąskaitą<select id="fTo">${accOptions(st.to_account_id, true)}</select></label>` : "<span></span>"}</div>` : ""}
       <div class="two"><label class="field">Data<input id="fDate" type="date" value="${st.date}"></label><label class="field">Aprašymas<input id="fNote" placeholder="${isT ? "pvz. Į Trading 212" : "pvz. Maxima"}" value="${esc(st.note)}" maxlength="80" autocomplete="off"></label></div>
       ${showLearn ? `<label class="check"><input type="checkbox" id="fLearn" ${st.learn ? "checked" : ""}> Įsiminti: „${esc(st.note.trim())}“ visada → ${esc(catById(st.cat).name)}${n ? ` ir pakeisti dar ${n} tokias operacijas` : ""}</label>` : ""}
-      ${!isEdit ? `<label class="check"><input type="checkbox" id="fRepeat" ${st.repeat ? "checked" : ""}> Kartoti kas mėnesį</label>` : ""}
+      ${!isEdit ? `<label class="check"><input type="checkbox" id="fRepeat" ${st.repeat ? "checked" : ""}> Kartoti kas mėnesį</label>`
+        : linkedRec ? `<div class="fine">↻ Pasikartojantis mokėjimas: „${esc(linkedRec.note || catById(linkedRec.cat).name)}“, kas mėn. ~${linkedRec.day} d. <button class="linkbtn" type="button" id="fRecGo">Tvarkyti</button></div>`
+        : st.type !== "trf" || isLoanAcc(st.to_account_id) || isInvestAcc(st.to_account_id) ? `<label class="check"><input type="checkbox" id="fRepeat" ${st.repeat ? "checked" : ""}> Pasikartojantis mokėjimas (kas mėnesį)</label>` : ""}
       ${tx?.recurring_id ? `<div class="fine">Sukurta iš pasikartojančios operacijos. Šablonas keičiamas skiltyje Daugiau → Pasikartojančios.</div>` : ""}
       ${tx?.memo && tx.memo !== tx.note ? `<div class="fine memo">${esc(tx.memo)}</div>` : ""}
       <div id="fErr" class="err" hidden></div>
@@ -484,6 +488,7 @@ function openTxSheet(tx, preset) {
     });
     $("#sheetBg").onclick = e => { if (e.target.id === "sheetBg") close(); };
     $("#fClose").onclick = close;
+    if ($("#fRecGo")) $("#fRecGo").onclick = () => { close(); go("more", "recurring"); };
     if ($("#fDel")) $("#fDel").onclick = () => {
       const orig = {...tx};
       removeTx(tx.id); close(); render();
@@ -510,6 +515,14 @@ function openTxSheet(tx, preset) {
         const rid = shortId();
         t.recurring_id = rid;
         S.cfg.recurring = [...(S.cfg.recurring || []), {id: rid, type: t.type, cat: t.cat, amount, note: t.note, account_id: t.account_id, to_account_id: t.to_account_id, day: Math.min(28, +st.date.slice(8)), start: ymOf(st.date), last: ymOf(st.date), active: true}];
+        saveSettings("recurring");
+      }
+      // esama operacija (pvz. iš banko išrašo) padaroma pasikartojančiu mokėjimu: programėlė lauks jos kas mėnesį
+      if (st.repeat && isEdit && !linkedRec) {
+        const rid = shortId(), fromBank = !!tx.memo || !!tx.import_id;
+        t.recurring_id = rid;
+        S.cfg.recurring = [...(S.cfg.recurring || []), {id: rid, type: t.type, cat: t.cat, amount, note: t.note, match: normKey(t.note), account_id: t.account_id, to_account_id: t.to_account_id,
+          day: Math.min(28, +st.date.slice(8)), start: ymOf(st.date), last: ymOf(st.date), active: true, ...(fromBank || accById(t.account_id)?.kind !== "cash" ? {mode: "plan"} : {})}];
         saveSettings("recurring");
       }
       saveTx(t);
@@ -621,14 +634,14 @@ function openAccSheet(acc, presetKind) {
       <label class="field">${loan ? "Įmokų gavėjas banko išraše" : "Atpažinti pervedimus pagal žodžius"}<input id="aMatch" value="${esc(st.match)}" placeholder="${loan ? "pvz. artea lizingas" : "pvz. revolut arba trading 212, trading212"}" autocomplete="off"></label>
       <div class="fine">${loan ? "Įmokos šiam gavėjui bus laikomos skolos grąžinimu, o ne išlaidomis, ir mažins likusią skolą." : "Importuojant banko išrašą, operacijos, kurių aprašyme yra šie žodžiai, bus pažymėtos kaip pervedimas į šią sąskaitą. Kelis žodžius atskirk kableliu."}</div>
       <div class="two"><label class="field">${loan ? "Likusi skola" : "Dabartinis likutis"}${cur !== null ? ` (dabar ${eur(loan ? -cur : cur)})` : ""}<input id="aBal" inputmode="decimal" placeholder="${isEdit ? "nekeisti" : "nebūtina"}" value="${esc(st.bal)}"></label>
-        <label class="field">Data<input id="aBalDate" type="date" value="${st.balDate}"></label></div>
+        ${st.kind === "cash" ? `<div class="field"><span>Data</span><div class="fine nodate">Nėra. Grynųjų likutis laikomas šiandienos.</div></div>` : `<label class="field">Data<input id="aBalDate" type="date" value="${st.balDate}"></label>`}</div>
       ${loan ? `<label class="field">Pradinė paskolos suma (nebūtina)<input id="aOrig" inputmode="decimal" value="${esc(st.original)}" placeholder="progresui rodyti"></label>` : ""}
       ${loan && m.length ? `<label class="check"><input type="checkbox" id="aReclass" ${st.reclass ? "checked" : ""}> Pažymėti ${m.length} ankstesnes įmokas (${eur(m.reduce((s, t) => s + t.amount, 0))}) kaip skolos grąžinimą</label>` : ""}
       <div id="aErr" class="err" hidden></div>
       <div class="row"><button class="btn" style="flex:1">${isEdit ? "Išsaugoti" : "Pridėti"}</button><button class="btn ghost" type="button" id="aClose">Uždaryti</button></div>
       ${isEdit && acc.id !== "main" ? (st.confirmDel ? `<div class="row"><button class="btn danger small" type="button" id="aDelYes">Taip, paslėpti sąskaitą</button><button class="btn ghost small" type="button" id="aDelNo">Ne</button></div><div class="fine">Operacijos lieka, tik sąskaita nebus rodoma pasirinkimuose.</div>` : `<button class="linkbtn" type="button" id="aDel" style="color:var(--crit);align-self:flex-start">Paslėpti sąskaitą</button>`) : ""}
     </form></div>`;
-    const keep = () => { if ($("#aIban")) st.iban = $("#aIban").value; st.name = $("#aName").value; st.kind = $("#aKind").value; st.match = $("#aMatch").value; st.bal = $("#aBal").value; st.balDate = $("#aBalDate").value;
+    const keep = () => { if ($("#aIban")) st.iban = $("#aIban").value; st.name = $("#aName").value; st.kind = $("#aKind").value; st.match = $("#aMatch").value; st.bal = $("#aBal").value; st.balDate = $("#aBalDate")?.value || todayISO();
       if ($("#aOrig")) st.original = $("#aOrig").value; if ($("#aReclass")) st.reclass = $("#aReclass").checked; };
     $("#sheetBg").onclick = e => { if (e.target.id === "sheetBg") close(); };
     $("#aClose").onclick = close;
