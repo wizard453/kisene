@@ -23,9 +23,11 @@ function categorize(text, dir, amount) {
 
 /* ---------- Skaičiavimai ---------- */
 function monthAgg(ym, txs) {
-  const a = {inc: 0, exp: 0, inv: 0, debt: 0, byCat: {}, byInc: {}, n: 0};
+  const a = {inc: 0, exp: 0, inv: 0, debt: 0, repay: 0, byCat: {}, byInc: {}, n: 0};
   for (const t of txs) {
     if (ymOf(t.date) !== ym) continue; a.n++;
+    // grąžintos skolos ir pinigų grąžinimai nėra pajamos
+    if (t.type === "inc" && isNeutralInc(t.cat)) { a.repay += t.amount; continue; }
     if (t.type === "inc") { a.inc += t.amount; a.byInc[t.cat] = (a.byInc[t.cat] || 0) + t.amount; }
     else if (t.type === "exp") { a.exp += t.amount; a.byCat[t.cat] = (a.byCat[t.cat] || 0) + t.amount; }
     else if (t.type === "trf") {
@@ -94,6 +96,42 @@ function frequentTemplates(type, max) {
     .map(x => ({...x, fixed: x.amts.every(v => Math.abs(v - x.amts[0]) < 0.005) ? x.amts[0] : null}));
 }
 
+// Pasikartojančio mokėjimo įtraukimas į „Laisvi pinigai“ iš visų operacijų sąrašo
+function openPendAdd() {
+  const root = $("#sheetRoot");
+  const sp = spendable(), have = new Set(sp.pendAll.filter(x => !x.maybe).map(x => x.name.toLowerCase()));
+  const all = allRecCandidates(null).filter(c => c.type !== "inc" && !have.has(c.note.toLowerCase()));
+  let q = "";
+  const list = () => {
+    const k = recRoot(q);
+    const items = all.filter(c => !k || recRoot(c.note + " " + catById(c.cat).name).includes(k)).slice(0, k ? 40 : 25);
+    return items.length ? items.map(c => `<div class="rrv add"><span class="rrv-t"><b>${esc(c.note)}</b><small>${esc(c.type === "trf" ? trfLabel(c.to_account_id) : catById(c.cat).name)} · ${c.count} kart. per ${c.months} mėn. · paskutinį kartą ${dayLabel(c.last)}</small></span>
+      <span class="am num">−${eur(c.amount)}</span><button class="btn ghost small" type="button" data-pendpick="${esc(c.key)}">Pridėti</button></div>`).join("") : `<div class="empty">Nieko nerasta.</div>`;
+  };
+  root.innerHTML = `<div class="sheet-bg" id="sheetBg"><div class="sheet" role="dialog" aria-modal="true" aria-label="Pridėti mokėjimą"><div class="grab"></div>
+    <h3 class="sheet-h">Pridėti pasikartojantį mokėjimą</h3>
+    <div class="fine">Pasirink iš savo operacijų. Mokėjimas bus įsimintas ir kas mėnesį skaičiuojamas kortelėje „Laisvi pinigai“, kol bus sumokėtas.</div>
+    <input id="pendQ" class="rrv-q" type="search" placeholder="Ieškoti, pvz. nuoma, Telia, lizingas" autocomplete="off">
+    <div class="rrv-list pend-pick">${list()}</div>
+    <div class="row"><button class="btn ghost" type="button" id="pendManual">Įvesti ranka</button><button class="btn ghost" type="button" id="pendClose">Uždaryti</button></div></div></div>`;
+  const close = () => { root.innerHTML = ""; };
+  $("#sheetBg").onclick = e => { if (e.target.id === "sheetBg") close(); };
+  $("#pendClose").onclick = close;
+  $("#pendManual").onclick = () => { close(); openRecSheet(null); };
+  $("#pendQ").oninput = e => { q = e.target.value; root.querySelector(".pend-pick").innerHTML = list(); };
+  root.querySelector(".pend-pick").onclick = e => {
+    const b = e.target.closest("[data-pendpick]"); if (!b) return;
+    const c = all.find(x => x.key === b.dataset.pendpick); if (!c) return;
+    addRecurringFromCand(c); close(); render(); toast(`„${c.note}“ įtrauktas į laukiamus mokėjimus`);
+  };
+}
+function addRecurringFromCand(c) {
+  const now = ymOf(todayISO());
+  S.cfg.recurring = [...(S.cfg.recurring || []), {id: shortId(), type: c.type, cat: c.type === "trf" ? "transfer" : c.cat, amount: c.amount, note: c.note, match: normKey(c.note), day: c.day,
+    account_id: c.account_id, to_account_id: c.to_account_id || null, start: now, last: now, active: true, mode: "plan", variable: c.variable}];
+  saveSettings("recurring");
+}
+
 /* ---------- Kiek dar galima išleisti šį mėnesį ---------- */
 // Automatiškai atpažinti pasikartojantys mokėjimai, kurių vartotojas dar neišsaugojo (talpinama, kol duomenys nepasikeičia)
 let autoRecCache = {k: "", v: []};
@@ -102,10 +140,10 @@ function autoRecurring() {
   if (autoRecCache.k === k) return autoRecCache.v;
   const saved = S.cfg.recurring || [], notRec = new Set(S.cfg.prefs?.notRecurring || []);
   const recent = addMonths(ymOf(todayISO()), -2) + "-01";
-  const v = detectRecurring(null).filter(c => c.strong && c.last >= recent && !notRec.has(c.key)).filter(c => {
+  const v = detectRecurring(null).filter(c => c.last >= recent && !notRec.has(c.key) && (c.strong || c.type !== "inc")).filter(c => {
     const fake = {id: "_", type: c.type, note: c.note, match: normKey(c.note), account_id: c.account_id, to_account_id: c.to_account_id, amount: c.amount, variable: c.variable};
     return !saved.some(r => recMatches(r, {type: c.type, note: c.note, memo: "", amount: c.amount, account_id: c.account_id, to_account_id: c.to_account_id}) || recMatches(fake, {type: r.type, note: r.note || "", memo: "", amount: r.amount, account_id: r.account_id, to_account_id: r.to_account_id}));
-  }).map(c => ({id: "auto:" + c.key, auto: true, active: true, start: "0000-00", mode: "plan", type: c.type, cat: c.type === "trf" ? "transfer" : c.cat, note: c.note, match: normKey(c.note), amount: c.amount, day: c.day, account_id: c.account_id, to_account_id: c.to_account_id, variable: c.variable}));
+  }).map(c => ({id: "auto:" + c.key, auto: true, maybe: !c.strong, cand: c, active: true, start: "0000-00", mode: "plan", type: c.type, cat: c.type === "trf" ? "transfer" : c.cat, note: c.note, match: normKey(c.note), amount: c.amount, day: c.day, account_id: c.account_id, to_account_id: c.to_account_id, variable: c.variable}));
   autoRecCache = {k, v};
   return v;
 }
@@ -121,13 +159,21 @@ function spendable() {
   const pending = [];
   let pendInc = 0;
   const recs = [...(S.cfg.recurring || []), ...(S.demo ? [] : autoRecurring())];
+  // šį mėnesį atžymėti mokėjimai neskaičiuojami
+  const skip = new Set(S.cfg.prefs?.pendSkip?.[ym] || []);
+  const pendAll = [];
   for (const r of recs) {
     if (!r.active || r.start > ym) continue;
     if (recMode(r) === "auto" ? (r.last && r.last >= ym) : recPaid(r, ym)) continue;
-    if (r.type === "inc") { pendInc += r.amount; continue; }
-    if (recIsOut(r)) pending.push({name: r.note || catById(r.cat).name, amount: r.amount, day: r.day, auto: !!r.auto, kind: r.type === "trf" ? (isLoanAcc(r.to_account_id) ? "loan" : isInvestAcc(r.to_account_id) ? "invest" : "save") : r.cat === "loan" ? "loan" : "exp"});
+    if (r.type === "inc") { if (!r.maybe && !skip.has(r.id)) pendInc += r.amount; continue; }
+    if (!recIsOut(r)) continue;
+    const item = {id: r.id, name: r.note || catById(r.cat).name, amount: r.amount, day: r.day, auto: !!r.auto, maybe: !!r.maybe, on: !r.maybe && !skip.has(r.id),
+      kind: r.type === "trf" ? (isLoanAcc(r.to_account_id) ? "loan" : isInvestAcc(r.to_account_id) ? "invest" : "save") : r.cat === "loan" ? "loan" : "exp"};
+    pendAll.push(item);
+    if (item.on) pending.push(item);
   }
   pending.sort((x, y) => x.day - y.day);
+  pendAll.sort((x, y) => (x.maybe - y.maybe) || x.day - y.day);
   const pendOut = pending.reduce((s, x) => s + x.amount, 0);
   const useAvg = S.cfg.prefs?.heroAvg !== false;
   const known = a.inc + pendInc;
@@ -140,7 +186,7 @@ function spendable() {
   // biudžetuose dar numatyta (likusi biudžeto dalis, kurios dar neišleidai)
   let budLeft = 0;
   for (const c of catsOf("exp")) { const b = budgetsFor(ym)[c.id]; if (b > 0) budLeft += Math.max(0, b - (a.byCat[c.id] || 0)); }
-  return {left, perDay: left / daysLeft, daysLeft, expected, received: a.inc, waiting, fromAvg: useAvg && avgInc > known, spent: a.exp, saved, debt: a.debt, pendOut, pending, budLeft, nAuto: pending.filter(x => x.auto).length};
+  return {left, perDay: left / daysLeft, daysLeft, expected, received: a.inc, waiting, fromAvg: useAvg && avgInc > known, spent: a.exp, saved, debt: a.debt, pendOut, pending, budLeft, nAuto: pending.filter(x => x.auto).length, pendAll};
 }
 /* ---------- Grafikai ---------- */
 function donut(slices, total, label, clickable) {
@@ -224,9 +270,11 @@ function ovHero(a, txs) {
       <div class="eq">
         ${line("Pajamos", sp.expected, "+", sp.waiting > 0.5 ? `gauta ${eur0(sp.received)}, dar laukiama ${eur0(sp.waiting)}${sp.fromAvg ? " (pagal 3 mėn. vidurkį)" : ""}` : "")}
         ${line("Jau išleista", sp.spent, "−", "")}
-        ${sp.pendOut ? `<details class="eq-pend"><summary>${line("Dar reikės sumokėti", sp.pendOut, "−", `${sp.pending.length} mokėjimai iki mėnesio pabaigos · rodyti`)}</summary>
-          <div class="pend-list">${sp.pending.map(x => `<div><span>${esc(x.name)}<small>${x.day} d.${x.kind === "loan" ? " · paskola" : x.kind === "invest" ? " · investavimas" : x.kind === "save" ? " · taupymas" : ""}${x.auto ? " · atpažinta automatiškai" : ""}</small></span><b class="num">−${eur(x.amount)}</b></div>`).join("")}</div>
-          ${sp.nAuto ? `<button class="linkbtn" data-sub="recurring">Peržiūrėti pasikartojančius mokėjimus ›</button>` : ""}</details>` : ""}
+        ${sp.pendAll.length ? `<details class="eq-pend" ${S.pendOpen ? "open" : ""}><summary>${line("Dar reikės sumokėti", sp.pendOut, "−", `${sp.pending.length} mokėjimai iki mėnesio pabaigos · ${S.pendOpen ? "slėpti" : "rodyti ir keisti"}`)}</summary>
+          <div class="pend-help">Pažymėk, kuriuos mokėjimus šį mėnesį dar reikės sumokėti. Atžymėti neskaičiuojami tik šį mėnesį.</div>
+          <div class="pend-list">${sp.pendAll.map(x => `<label class="${x.on ? "" : "off"}"><input type="checkbox" data-pendtoggle="${esc(x.id)}" ${x.on ? "checked" : ""}><span>${esc(x.name)}<small>${x.day} d.${x.kind === "loan" ? " · paskola" : x.kind === "invest" ? " · investavimas" : x.kind === "save" ? " · taupymas" : ""}${x.maybe ? " · galimai pasikartojantis" : x.auto ? " · atpažinta automatiškai" : ""}</small></span><b class="num">−${eur(x.amount)}</b></label>`).join("")}</div>
+          <div class="row"><button class="btn small pend-add" id="pendAdd">+ Pridėti mokėjimą</button><button class="linkbtn" data-sub="recurring">Visi pasikartojantys ›</button></div></details>`
+          : `<div class="eq-row"><span>Dar reikės sumokėti<small>pasikartojančių mokėjimų nerasta</small></span><button class="btn small pend-add" id="pendAdd">+ Pridėti</button></div>`}
         ${sp.saved ? line("Investuota", sp.saved, "−", "") : ""}
         ${sp.debt ? line("Paskolų įmokos", sp.debt, "−", "") : ""}
         ${line("Laisvi pinigai", sp.left, sp.left < 0 ? "−" : "=", "", "total")}
@@ -289,11 +337,12 @@ function ovIncome(a, txs) {
   const extra = ii && Math.abs(ii.total) >= 0.01 ? [{id: "_inv", name: "Investicijų grąža", color: "c7", v: Math.max(0, ii.total), go: "invest", tag: "portfelyje"}] : [];
   const total = a.inc;
   const prev = monthAgg(addMonths(S.ym, -1), txs).inc;
-  if (!entries.length && !extra.length) return `<section class="card"><div class="sec-h"><h2>Iš kur ateina pajamos</h2></div><div class="empty">Šį mėnesį pajamų dar nėra.</div></section>`;
+  if (!entries.length && !extra.length) return `<section class="card"><div class="sec-h"><h2>Iš kur ateina pajamos</h2></div><div class="empty">Šį mėnesį pajamų dar nėra.${a.repay > 0 ? ` Grąžinta pinigų ${eur(a.repay)}, bet tai nėra pajamos.` : ""}</div></section>`;
   const slices = topSlices(entries);
   return `<section class="card">
     <div class="sec-h"><h2>Iš kur ateina pajamos</h2>${infoBtn("income")}<span class="aside num">${eur0(total)}${prev > 0 ? ` <span class="${total >= prev ? "pos" : "negc"}">${total >= prev ? "↑" : "↓"} ${pct(Math.abs((total - prev) / prev * 100))}</span>` : ""}</span></div>
     <div class="donut-wrap">${total > 0 ? donut(slices, total, "Pajamos", true) : ""}<div class="legend">${legendFor(entries, total, false)}${legendFor(extra, 0, false)}</div></div>
+    ${a.repay > 0 ? `<button class="fine linkbtn-plain" data-catfilter="repay">Grąžinta pinigų ${eur(a.repay)}: skolos grąžinimai ir pinigų grąžinimai nėra pajamos, todėl čia neįskaičiuoti ›</button>` : ""}
     ${ii && Math.abs(ii.total) >= 0.01 ? `<div class="fine">Investicijų grąža (dividendai ${eur(ii.div)}, palūkanos ${eur(ii.int)}, pardavimų rezultatas ${signed(ii.gain)}) lieka investavimo platformose, todėl į mėnesio pajamas neįskaičiuojama.</div>` : ""}
     <div class="row between"><span class="fine">Šaltinį pakeisi paspaudęs operaciją.</span><button class="linkbtn" data-go="more" data-sub="cats">Tvarkyti šaltinius</button></div>
     <button class="linkbtn more-link" data-go="more" data-sub="inctrend">Pajamų kitimas laike ›</button>
@@ -358,7 +407,7 @@ function listBody() {
     .sort((x, y) => y.date.localeCompare(x.date) || String(y.created_at || "").localeCompare(String(x.created_at || "")));
   if (!rows.length) return `<div class="txs"><div class="empty">${q ? "Nieko nerasta." : "Šį mėnesį operacijų nėra."}</div></div>`;
   let html = "", last = "";
-  const inc = rows.filter(t => t.type === "inc").reduce((s, t) => s + t.amount, 0), exp = rows.filter(t => t.type === "exp").reduce((s, t) => s + t.amount, 0);
+  const inc = rows.filter(isRealInc).reduce((s, t) => s + t.amount, 0), exp = rows.filter(t => t.type === "exp").reduce((s, t) => s + t.amount, 0);
   for (const t of rows.slice(0, 400)) {
     if (t.date !== last) { last = t.date; const d = new Date(t.date + "T12:00"); html += `<div class="day">${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}${allMonths ? " " + d.getFullYear() : ""}</div>`; }
     html += txItem(t);
@@ -448,6 +497,12 @@ function openTxSheet(tx, preset) {
       if (!(amount > 0)) { fail("Įvesk sumą, didesnę už nulį."); $("#fAmt").focus(); return; }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(st.date)) { fail("Pasirink datą."); return; }
       if (st.type === "trf" && st.to_account_id === st.account_id) { fail("Pasirink skirtingas sąskaitas."); return; }
+      // galimas dublikatas: ta pati suma, sąskaita ir tipas per ±2 dienas
+      if (!isEdit && !st.dupOk) {
+        const d0 = Date.parse(st.date);
+        const dup = [...S.txs.values()].find(x => x.type === st.type && Math.abs(x.amount - amount) < 0.005 && x.account_id === st.account_id && Math.abs(Date.parse(x.date) - d0) <= 2 * 86400000);
+        if (dup) { st.dupOk = true; fail(`Panaši operacija jau yra: ${dup.note || catById(dup.cat).name}, ${eur(dup.amount)}, ${dayLabel(dup.date)}. Jei tai kita operacija, spausk „Išsaugoti“ dar kartą.`); return; }
+      }
       const id = isEdit ? tx.id : newId();
       const t = {id, type: st.type, cat: st.type === "trf" ? "transfer" : st.cat, amount, date: st.date, note: st.note.trim(), account_id: st.account_id,
         to_account_id: st.type === "trf" ? (st.to_account_id || null) : null, memo: tx?.memo || "", recurring_id: tx?.recurring_id || null, created_at: isEdit ? tx.created_at : undefined};
@@ -496,7 +551,7 @@ function vBudgets() {
 /* ---------- Kategorijos ir taisyklės ---------- */
 function vCats() {
   const budA = monthAgg(ymOf(todayISO()), allTx());
-  const list = type => categories().filter(c => c.type === type && !c.archived).map(c => `<button class="tx" data-editcat="${c.id}"><span class="dot" style="background:var(--${c.color})">${catIcon(c)}</span><div><div class="t1">${esc(c.name)}</div><div class="t2">${type === "exp" ? (budgetsFor(nowYm())[c.id] ? `Biudžetas ${eur0(budgetsFor(nowYm())[c.id])} · išleista ${eur0(budA.byCat[c.id] || 0)}` : `Šį mėn. ${eur0(budA.byCat[c.id] || 0)}`) : `Šį mėn. ${eur0(budA.byInc[c.id] || 0)}`}</div></div><span class="chev">›</span></button>`).join("");
+  const list = type => categories().filter(c => c.type === type && !c.archived).map(c => `<button class="tx" data-editcat="${c.id}"><span class="dot" style="background:var(--${c.color})">${catIcon(c)}</span><div><div class="t1">${esc(c.name)}</div><div class="t2">${type === "exp" ? (budgetsFor(nowYm())[c.id] ? `Biudžetas ${eur0(budgetsFor(nowYm())[c.id])} · išleista ${eur0(budA.byCat[c.id] || 0)}` : `Šį mėn. ${eur0(budA.byCat[c.id] || 0)}`) : c.neutral ? `Neskaičiuojama kaip pajamos · šį mėn. ${eur0(budA.repay || 0)}` : `Šį mėn. ${eur0(budA.byInc[c.id] || 0)}`}</div></div><span class="chev">›</span></button>`).join("");
   const hidden = categories().filter(c => c.archived);
   const rules = S.cfg.rules || [];
   const ruleTarget = r => r.type === "trf" ? "Pervedimas → " + accName(r.to_account_id) : catById(r.cat).name;
@@ -513,21 +568,41 @@ function vCats() {
   ${rules.length ? `<div class="txs">${rules.map(r => `<button class="tx" data-editrule="${esc(r.id)}"><span class="dot" style="background:var(--${r.type === "trf" ? "c9" : catById(r.cat).color})">${r.type === "trf" ? icon("swap") : catIcon(catById(r.cat))}</span><div><div class="t1">„${esc(r.pattern)}“</div><div class="t2">→ ${esc(ruleTarget(r))}${r.max != null ? ` · kai suma iki ${eur(r.max)}` : r.min != null ? ` · kai suma nuo ${eur(r.min)}` : ""}</div></div><span class="chev">›</span></button>`).join("")}</div>` : `<div class="txs"><div class="empty">Taisyklių dar nėra.</div></div>`}`;
 }
 /* ---------- Sąskaitos ---------- */
+// Kuriam bankui priklauso sąskaita: pagal IBAN, pavadinimą arba tipą
+const BANK_DISPLAY = {revolut: "Revolut", swedbank: "Swedbank", seb: "SEB", luminor: "Luminor", paysera: "Paysera", artea: "Artea", citadele: "Citadele", medbank: "Medicinos bankas", urbo: "Urbo bankas", n26: "N26", wise: "Wise"};
+function bankOfAcc(a) {
+  if (a.kind === "cash") return "Grynieji";
+  if (a.kind === "invest") return "Investavimo platformos";
+  const ib = (a.ownIbans || [])[0];
+  const byIban = ib && typeof bankOfIban === "function" ? bankOfIban(ib) : "";
+  if (byIban) return byIban;
+  const byName = (typeof BANK_NAMES !== "undefined" ? BANK_NAMES : []).find(([, re]) => re.test(a.name + " " + (a.match || "")));
+  if (byName) return BANK_DISPLAY[byName[0]] || byName[0];
+  return "Kitos sąskaitos";
+}
+const accIdent = a => { const ib = (a.ownIbans || [])[0]; return ib ? "…" + ib.slice(-4) : ""; };
 function vAccounts() {
   const row = a => { const b = accountBalance(a); const loan = a.kind === "loan";
     const prog = loan && a.original && b !== null ? Math.max(0, Math.min(100, (1 - (-b) / a.original) * 100)) : null;
-    return `<button class="tx" data-acc="${esc(a.id)}"><span class="dot" style="background:var(--${a.kind === "invest" ? "c7" : a.kind === "cash" ? "c4" : loan ? "c11" : "c1"})">${icon(loan ? "bank" : a.kind === "invest" ? "coin" : a.kind === "cash" ? "receipt" : "home")}</span><div><div class="t1">${esc(a.name)}</div><div class="t2">${esc(ACCOUNT_KINDS[a.kind] || "")}${prog !== null ? ` · grąžinta ${pct(prog)}` : a.match ? " · atpažįstama pagal „" + esc(a.match) + "“" : ""}</div>${prog !== null ? `<div class="gbar thin"><b style="width:${prog}%;background:var(--c11)"></b></div>` : ""}</div><span class="am num ${b !== null && b < 0 ? "negc" : ""}">${b === null ? '<span class="muted">—</span>' : (b < 0 ? "−" : "") + eur(Math.abs(b))}</span></button>`; };
+    return `<button class="tx" data-acc="${esc(a.id)}"><span class="dot" style="background:var(--${a.kind === "invest" ? "c7" : a.kind === "cash" ? "c4" : loan ? "c11" : "c1"})">${icon(loan ? "bank" : a.kind === "invest" ? "coin" : a.kind === "cash" ? "receipt" : "home")}</span><div><div class="t1">${esc(a.name)}</div><div class="t2">${accIdent(a) ? `<span class="num">${esc(accIdent(a))}</span> · ` : ""}${esc(ACCOUNT_KINDS[a.kind] || "")}${prog !== null ? ` · grąžinta ${pct(prog)}` : a.match ? " · atpažįstama pagal „" + esc(a.match) + "“" : ""}</div>${prog !== null ? `<div class="gbar thin"><b style="width:${prog}%;background:var(--c11)"></b></div>` : ""}</div><span class="am num ${b !== null && b < 0 ? "negc" : ""}">${b === null ? '<span class="muted">—</span>' : (b < 0 ? "−" : "") + eur(Math.abs(b))}</span></button>`; };
   const list = activeAccounts();
   const debts = list.filter(a => a.kind === "loan");
+  const groups = new Map();
+  for (const a of list.filter(a => a.kind !== "loan")) { const k = bankOfAcc(a); groups.set(k, [...(groups.get(k) || []), a]); }
+  const order = [...groups.keys()].sort((x, y) => ["Grynieji", "Investavimo platformos", "Kitos sąskaitos"].indexOf(x) - ["Grynieji", "Investavimo platformos", "Kitos sąskaitos"].indexOf(y) || x.localeCompare(y));
+  const sumOf = arr => arr.reduce((s, a) => s + (accountBalance(a) || 0), 0);
+  const tracked = list.filter(a => a.kind !== "loan" && a.kind !== "invest" && accountBalance(a) !== null);
   return `${subHead("Sąskaitos")}
   <div class="fine" style="margin-top:-6px">Pervedimai tarp savo sąskaitų nėra nei pajamos, nei išlaidos. Pervedimai į investavimo platformą rodomi kaip investavimas, o įmokos paskoloms mažina skolą.</div>
-  <div class="txs">${list.filter(a => a.kind !== "loan").map(row).join("")}</div>
+  ${tracked.length ? `<div class="acc-total"><span>Iš viso sąskaitose</span><b class="num">${eur(sumOf(tracked))}</b></div>` : ""}
+  ${order.map(k => { const arr = groups.get(k); const known = arr.filter(a => accountBalance(a) !== null);
+    return `<div class="sec-h"><h2>${esc(k)}</h2>${known.length && k !== "Investavimo platformos" ? `<span class="aside num">${eur(sumOf(known))}</span>` : ""}</div><div class="txs">${arr.map(row).join("")}</div>`; }).join("")}
   ${debts.length ? `<div class="sec-h"><h2>Skolos</h2></div><div class="txs">${debts.map(row).join("")}</div>` : ""}
   <div class="row"><button class="btn ghost" id="addAcc">Pridėti sąskaitą</button><button class="btn ghost" id="addLoan">Pridėti paskolą</button></div>`;
 }
 function openAccSheet(acc, presetKind) {
   const isEdit = !!acc;
-  const st = {name: acc?.name || "", kind: acc?.kind || presetKind || "bank", match: acc?.match || "", bal: "", balDate: todayISO(), original: acc?.original ? String(acc.original).replace(".", ",") : "", reclass: true, confirmDel: false};
+  const st = {name: acc?.name || "", iban: (acc?.ownIbans || [])[0] || "", kind: acc?.kind || presetKind || "bank", match: acc?.match || "", bal: "", balDate: todayISO(), original: acc?.original ? String(acc.original).replace(".", ",") : "", reclass: true, confirmDel: false};
   const cur = acc ? accountBalance(acc) : null;
   const root = $("#sheetRoot");
   const close = () => { root.innerHTML = ""; };
@@ -540,6 +615,8 @@ function openAccSheet(acc, presetKind) {
       <div class="grab"></div><h3 class="sheet-h">${isEdit ? "Sąskaita" : "Nauja sąskaita"}</h3>
       <label class="field">Pavadinimas<input id="aName" value="${esc(st.name)}" placeholder="${loan ? "pvz. Automobilio lizingas" : "pvz. Revolut"}" maxlength="40" required></label>
       ${!isEdit && !loan ? `<div class="bankchips">${["Swedbank", "SEB", "Luminor", "Revolut", "Paysera", "Artea", "Citadele", "Medicinos bankas", "Urbo bankas", "N26", "Wise", "Taupomoji", "Trading 212"].map(b => `<button type="button" class="chip" data-bankchip="${b}">${b}</button>`).join("")}</div>` : ""}
+      ${!loan && st.kind !== "cash" && st.kind !== "invest" ? `<label class="field">Sąskaitos numeris (IBAN, nebūtina)<input id="aIban" value="${esc(st.iban)}" placeholder="LT00 0000 0000 0000 0000" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+      <div class="fine">Padeda atskirti kelias to paties banko sąskaitas ir tiksliai atpažinti pervedimus tarp jų.</div>` : ""}
       <label class="field">Tipas<select id="aKind">${Object.entries(ACCOUNT_KINDS).map(([k, v]) => `<option value="${k}" ${st.kind === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       <label class="field">${loan ? "Įmokų gavėjas banko išraše" : "Atpažinti pervedimus pagal žodžius"}<input id="aMatch" value="${esc(st.match)}" placeholder="${loan ? "pvz. artea lizingas" : "pvz. revolut arba trading 212, trading212"}" autocomplete="off"></label>
       <div class="fine">${loan ? "Įmokos šiam gavėjui bus laikomos skolos grąžinimu, o ne išlaidomis, ir mažins likusią skolą." : "Importuojant banko išrašą, operacijos, kurių aprašyme yra šie žodžiai, bus pažymėtos kaip pervedimas į šią sąskaitą. Kelis žodžius atskirk kableliu."}</div>
@@ -551,7 +628,7 @@ function openAccSheet(acc, presetKind) {
       <div class="row"><button class="btn" style="flex:1">${isEdit ? "Išsaugoti" : "Pridėti"}</button><button class="btn ghost" type="button" id="aClose">Uždaryti</button></div>
       ${isEdit && acc.id !== "main" ? (st.confirmDel ? `<div class="row"><button class="btn danger small" type="button" id="aDelYes">Taip, paslėpti sąskaitą</button><button class="btn ghost small" type="button" id="aDelNo">Ne</button></div><div class="fine">Operacijos lieka, tik sąskaita nebus rodoma pasirinkimuose.</div>` : `<button class="linkbtn" type="button" id="aDel" style="color:var(--crit);align-self:flex-start">Paslėpti sąskaitą</button>`) : ""}
     </form></div>`;
-    const keep = () => { st.name = $("#aName").value; st.kind = $("#aKind").value; st.match = $("#aMatch").value; st.bal = $("#aBal").value; st.balDate = $("#aBalDate").value;
+    const keep = () => { if ($("#aIban")) st.iban = $("#aIban").value; st.name = $("#aName").value; st.kind = $("#aKind").value; st.match = $("#aMatch").value; st.bal = $("#aBal").value; st.balDate = $("#aBalDate").value;
       if ($("#aOrig")) st.original = $("#aOrig").value; if ($("#aReclass")) st.reclass = $("#aReclass").checked; };
     $("#sheetBg").onclick = e => { if (e.target.id === "sheetBg") close(); };
     $("#aClose").onclick = close;
@@ -596,7 +673,9 @@ function openAccSheet(acc, presetKind) {
         anchor = {date: anchor.date, amount: r2(bal - diff)};
       }
       const orig = loan && st.original.trim() ? Math.abs(parseNum(st.original) || 0) : null;
-      const next = {...base, name, kind: st.kind, match: st.match.trim().toLowerCase(), anchor, original: orig};
+      const ib = st.iban.replace(/\s+/g, "").toUpperCase();
+      const ownIbans = ib ? [ib, ...(base.ownIbans || []).filter(x => x !== ib)] : (base.ownIbans || []).slice(1);
+      const next = {...base, name, kind: st.kind, match: st.match.trim().toLowerCase(), anchor, original: orig, ownIbans};
       S.cfg.accounts = isEdit ? S.cfg.accounts.map(a => a.id === acc.id ? next : a) : [...S.cfg.accounts, next];
       saveSettings("accounts"); close(); render(); toast(isEdit ? "Sąskaita išsaugota" : "Sąskaita pridėta");
     };

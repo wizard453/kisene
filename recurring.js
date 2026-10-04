@@ -73,7 +73,7 @@ function recCand(g, strong) {
     amount: r2(g.txs.slice(-3).reduce((s, t) => s + t.amount, 0) / Math.min(3, g.txs.length)), day: Math.min(28, +g.last.date.slice(8)),
     variable: spread > 0.1, count: g.txs.length, months: g.months.size, last: g.last.date, strong, ids: g.txs.map(t => t.id)};
 }
-const BILL_CATS = ["home", "subs", "loan", "insurance"];
+const BILL_CATS = ["home", "utilities", "subs", "loan", "insurance"];
 const EVERYDAY_CATS = ["food", "cafe", "transport", "shop", "travel"];
 function detectRecurring(accountId) {
   const out = [];
@@ -94,14 +94,14 @@ function detectRecurring(accountId) {
     const regular = months.size >= 2 && perMonth <= 1.5 && ((medGap >= 20 && medGap <= 40) || perMonth <= 1.2 || monthlyGaps >= Math.floor(txs.length / 2));
     let strong = false, maybe = false;
     if (regular) {
-      if (billLike) strong = same >= Math.ceil(txs.length * 0.6) || spread <= (g.cat === "home" ? 1.5 : 0.6);
+      if (billLike) strong = same >= Math.ceil(txs.length * 0.6) || spread <= (g.cat === "utilities" ? 1.5 : 0.6);
       // kasdienės kategorijos: ta pati suma maždaug tą pačią mėnesio dieną bent 3 mėnesius (pvz. sporto klubas)
       else strong = exact && sameDay && perMonth <= 1.2 && months.size >= 3;
       // pasiūlymas be pažymėjimo, bet ne kasdieniams pirkiniams (maistas, kavinės, transportas, apsipirkimas, kelionės)
       if (!strong) maybe = perMonth <= 1.2 && (billLike ? (exact || sameDay) : exact && sameDay && !EVERYDAY_CATS.includes(g.cat));
     }
     // prenumerata ar sąskaita, matyta tik kartą
-    if (!regular && txs.length === 1 && g.type === "exp" && ["subs", "insurance", "home"].includes(g.cat)) maybe = true;
+    if (!regular && txs.length === 1 && g.type === "exp" && ["subs", "insurance", "home", "utilities"].includes(g.cat)) maybe = true;
     if (!strong && !maybe) continue;
     out.push(recCand(g, strong));
   }

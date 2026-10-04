@@ -100,7 +100,7 @@ function wealthChange(all) {
   let saved = 0;
   for (const t of S.txs.values()) {
     if (t.date <= d0 || t.date > d1 || !accIds.has(t.account_id)) continue;
-    if (t.type === "inc") saved += t.amount; else if (t.type === "exp") saved -= t.amount;
+    if (isRealInc(t)) saved += t.amount; else if (t.type === "exp") saved -= t.amount;
   }
   const invTxs = [...S.inv.values()];
   const depPlats = new Set(invTxs.filter(t => t.kind === "deposit").map(t => t.platform));
@@ -238,7 +238,10 @@ function vWealthPage() {
       <div class="wline total"><span>Dabar</span><b class="num">${eur(c.end)}</b></div>
     </div></section>` : ""}
   <section class="card"><div class="sec-h"><h2>Sudėtis dabar</h2></div>
-    <div class="wealth">${accs.map(a => { const b = accountBalance(a); return `<button class="wrow" data-acc="${esc(a.id)}"><span>${esc(a.name)}</span><span class="num ${b < 0 ? "negc" : ""}">${b < 0 ? "−" : ""}${eur(Math.abs(b))}</span></button>`; }).join("")}
+    <div class="wealth">${(() => { const own = accs.filter(a => a.kind !== "loan"), loans = accs.filter(a => a.kind === "loan");
+      const sum = arr => arr.reduce((t, a) => t + (accountBalance(a) || 0), 0);
+      return (own.length ? `<button class="wrow" data-sub="accounts"><span>Sąskaitos<small> · ${own.length}</small></span><span class="num ${sum(own) < 0 ? "negc" : ""}">${sum(own) < 0 ? "−" : ""}${eur(Math.abs(sum(own)))}</span></button>` : "")
+        + (loans.length ? `<button class="wrow" data-sub="accounts"><span>Skolos<small> · ${loans.length}</small></span><span class="num negc">−${eur(Math.abs(sum(loans)))}</span></button>` : ""); })()}
     ${S.inv.size ? `<button class="wrow" data-go="invest"><span>Investicijos</span><span class="num">${eur(last.inv || 0)}</span></button>` : ""}</div>
     ${untracked.length ? `<div class="fine">Neįtrauktos, nes nenurodytas likutis: ${untracked.map(a => esc(a.name)).join(", ")}. <button class="linkbtn" data-sub="accounts">Nustatyti</button></div>` : ""}
   </section>`;

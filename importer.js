@@ -538,8 +538,14 @@ async function vImport() {
   const rows = cands.map(c => classifyBank(c, imp));
   const dupT = rows.filter(isDuplicateTransfer);
   const existing = rows.filter(r => S.txs.has(r.id));
-  const fresh = rows.filter(r => !S.txs.has(r.id) && !dupT.includes(r) && r.type !== "skip");
-  imp._fresh = fresh;
+  const fresh0 = rows.filter(r => !S.txs.has(r.id) && !dupT.includes(r) && r.type !== "skip");
+  // ranka įvestos operacijos, kurios sutampa su banko įrašu (ta pati suma ir sąskaita, ±3 d.)
+  const manualDups = findManualDups(fresh0, imp);
+  imp.dupChoice = imp.dupChoice || {};
+  const dups = fresh0.filter(r => manualDups.has(r.id));
+  const fresh = fresh0.filter(r => !manualDups.has(r.id) || imp.dupChoice[r.id] === "both");
+  imp._fresh = fresh; imp._dups = dups.map(r => ({r, m: manualDups.get(r.id)}));
+  const nImp = fresh.length + dups.filter(r => (imp.dupChoice[r.id] || "replace") === "replace").length;
   const groups = importGroupsOf(fresh); imp._groups = groups;
   const cnt = t => fresh.filter(r => r.type === t).length;
   const unsure = groups.filter(g => !g.sure);
@@ -572,6 +578,9 @@ async function vImport() {
     <div class="aibox"><button class="btn ghost small" id="impAI" ${ai.busy ? "disabled" : ""}>${ai.busy ? "AI tikrina…" : ai.done ? "Patikrinti dar kartą su AI" : "Patikrinti kategorijas su AI"}</button>
       <small>${ai.err ? `<span class="err">${esc(ai.err)}</span>` : ai.busy ? "AI peržiūri pavadinimus, sumas ir dažnumą. Tai užtrunka kelias sekundes, gali toliau tikrinti sąrašą." : ai.done ? (ai.changed ? `AI pakeitė ${ai.changed} grupių kategorijas. Jos pažymėtos „Pakeitė AI“ su priežastimi. Jei nesutinki, pakeisk.` : "AI peržiūrėjo ir klaidų nerado.") : "AI peržiūri pavadinimus ir sumas ir pataiso aiškiai klaidingas kategorijas, pvz. gėrimą degalinėje."}</small>
       <label class="check"><input type="checkbox" id="aiImportAuto" ${S.cfg.prefs?.aiImport !== false ? "checked" : ""}> Tikrinti su AI automatiškai</label></div>
+    ${imp._dups.length ? `<div class="dupbox"><b>Galimi dublikatai (${imp._dups.length})</b><div class="fine">Šios operacijos jau įvestos ranka. Kad nebūtų skaičiuojamos du kartus, ranka įvestą operaciją programėlė pakeis banko įrašu ir paliks tavo kategoriją bei pavadinimą.</div>
+      ${imp._dups.map(({r, m}) => `<div class="dup"><div class="dup-h"><span><b>${esc(r.note)}</b><small>Banke: ${dayLabel(r.date)} · Įvesta ranka: ${esc(m.note || catById(m.cat).name)}, ${dayLabel(m.date)}</small></span><b class="num">${r.dir === "in" ? "+" : "−"}${eur(r.amount)}</b></div>
+        <select data-dupchoice="${r.id}"><option value="replace" ${(imp.dupChoice[r.id] || "replace") === "replace" ? "selected" : ""}>Pakeisti ranka įvestą banko įrašu</option><option value="skip" ${imp.dupChoice[r.id] === "skip" ? "selected" : ""}>Neimportuoti, palikti įvestą ranka</option><option value="both" ${imp.dupChoice[r.id] === "both" ? "selected" : ""}>Tai skirtingos operacijos, palikti abi</option></select></div>`).join("")}</div>` : ""}
     <div class="filters">${[["all", `Visos (${groups.length})`], ["unsure", `Patikrinti (${unsure.length})`], ["trf", "Pervedimai"], ["inc", "Pajamos"]].map(([k, n]) => `<button class="chip" data-gfilter="${k}" aria-pressed="${f === k}">${n}</button>`).join("")}</div>
     <div class="igs">${shown.map(g => vImpGroup(g, groups.indexOf(g))).join("") || `<div class="empty">Šiame sąraše nieko nėra.</div>`}</div>` : ""}
   </section>
@@ -580,8 +589,26 @@ async function vImport() {
     ${showBal ? `<label class="check big"><input type="checkbox" id="impBal" ${imp.setBalance ? "checked" : ""}><span><b>Nustatyti likutį: ${eur(balances.amount)}</b><small>Tai sąskaitos „${esc(accName(imp.account_id))}“ likutis išrašo pabaigoje (${balances.date}). Pažymėk, kad likutis programėlėje sutaptų su banku.</small></span></label>` : ""}
     ${!fresh.length && !showBal ? `<div class="fine">Naujų operacijų nėra, importuoti nieko nereikia.</div>` : `<div class="fine">Paspaudus mygtuką apačioje operacijos bus įrašytos. Vėliau jas galėsi pakeisti arba ištrinti visą failą skiltyje „Įkelti failai“.</div>`}
   </section>
-  <div class="imp-bar"><button class="btn" id="doImport" ${!fresh.length && !showBal ? "disabled" : ""}>${fresh.length ? `Importuoti ${fresh.length} operacijas` : "Nustatyti likutį"}</button></div>` : ""}`;
+  <div class="imp-bar"><button class="btn" id="doImport" ${!nImp && !showBal ? "disabled" : ""}>${nImp ? `Importuoti ${nImp} operacijas` : "Nustatyti likutį"}</button></div>` : ""}`;
   return body;
+}
+function findManualDups(rows, imp) {
+  const imported = new Set([...S.txs.values()].filter(t => t.import_id || t.memo).map(t => t.account_id));
+  const manual = [...S.txs.values()].filter(t => !t.import_id && !t.memo && !t.recurring_id && t.type !== "trf" &&
+    (t.account_id === imp.account_id || (accById(t.account_id)?.kind !== "cash" && !imported.has(t.account_id))));
+  const used = new Set(), out = new Map();
+  for (const r of rows) {
+    if (r.type === "trf") continue;
+    const d0 = Date.parse(r.date);
+    let best = null;
+    for (const t of manual) {
+      if (used.has(t.id) || (t.type === "inc") !== (r.dir === "in") || Math.abs(t.amount - r.amount) > 0.005) continue;
+      const dd = Math.abs(Date.parse(t.date) - d0) / 86400000; if (dd > 3) continue;
+      if (!best || dd < best.dd) best = {t, dd};
+    }
+    if (best) { used.add(best.t.id); out.set(r.id, best.t); }
+  }
+  return out;
 }
 // Vienos operacijos pakeitimas
 function bankOverride(id, choice) {
@@ -624,7 +651,8 @@ Svarbios taisyklės:
 - Paskolų ir lizingo įmokos yra exp:loan arba pervedimas į paskolos sąskaitą, jei ji yra sąraše.
 - Pervedimai į investavimo platformas (Trading 212, Lightyear ir kt.) yra pervedimas į investicijų sąskaitą, jei ji yra sąraše.
 - Pervedimai asmeniui, kurio vardas sutampa su sąskaitos savininku, yra pervedimai tarp savo sąskaitų.
-- Reguliarūs mokėjimai asmeniui panašia suma kas mėnesį dažnai yra nuoma (exp:home).
+- Reguliarūs mokėjimai asmeniui panašia suma kas mėnesį dažnai yra nuoma (exp:home). Elektra, vanduo, šildymas, dujos, atliekos ir internetas namams yra komunaliniai (exp:utilities).
+- Kai skolininkas grąžina paskolintus pinigus ar parduotuvė grąžina pinigus už prekę, tai yra inc:repay (Grąžinimai, ne pajamos). Dovanos yra inc:gift.
 - Universiteto, darbdavio ar įmonės reguliarūs mokėjimai yra pajamos (atlyginimas, stipendija ar kitos).
 - Jei negali nuspręsti, grupės neįtrauk.
 ${S.cfg.prefs?.ownName ? `Sąskaitos savininkas: ${S.cfg.prefs.ownName}.\n` : ""}${rules ? `Vartotojo nustatytos taisyklės (jų nekeisk): ${rules}.\n` : ""}
@@ -638,7 +666,7 @@ ${JSON.stringify(list)}`;
   for (const x of Array.isArray(j) ? j : []) {
     const g = groups[x.i]; if (!g || !x.c) continue;
     let choice = String(x.c).trim();
-    if (/^(food|home|transport|cafe|fun|subs|health|shop|travel|loan|insurance|other|salary|grant|side|gift|invinc|cashinc|iother)$/.test(choice) || !choice.includes(":")) { const c = catById(choice); choice = c.type === "inc" ? "inc:" + c.id : "exp:" + c.id; }
+    if (/^(food|home|utilities|transport|cafe|fun|subs|health|shop|travel|loan|insurance|other|salary|grant|side|gift|repay|invinc|cashinc|iother)$/.test(choice) || !choice.includes(":")) { const c = catById(choice); choice = c.type === "inc" ? "inc:" + c.id : "exp:" + c.id; }
     const [type, v] = choice.split(":");
     if (type === "trf") { if (v && !accById(v)) choice = "trf:"; }
     else { const c = cats.find(c => c.id === v); if (!c || (c.type === "inc") !== (g.dir === "in") || type !== c.type) continue; }
@@ -738,7 +766,14 @@ document.addEventListener("change", e => {
 }, true);
 function doBankImport() {
   const imp = S.imp; if (!imp) return;
-  const fresh = (imp._fresh || []).filter(r => r.type !== "skip");
+  // dublikatai: ranka įvesta operacija pakeičiama banko įrašu, paliekant vartotojo kategoriją ir pavadinimą
+  const replaced = [];
+  for (const {r, m} of imp._dups || []) {
+    const ch = imp.dupChoice?.[r.id] || "replace";
+    if (ch === "replace") replaced.push({...r, type: m.type, cat: m.cat, note: m.note || r.note, replacedId: m.id});
+  }
+  const fresh = [...(imp._fresh || []).filter(r => r.type !== "skip"), ...replaced];
+  if (replaced.length) bulkDelete("transactions", replaced.map(r => r.replacedId));
   const ds = fresh.map(r => r.date).sort();
   const impId = fresh.length ? recordImport("bank", {file: imp.name || "", account_id: imp.account_id, from: ds[0], to: ds[ds.length - 1]}) : null;
   // pervedimas, jau matytas kitos sąskaitos išraše: esama operacija paverčiama pervedimu tarp abiejų sąskaitų, nauja neįrašoma

@@ -4,7 +4,7 @@
 S.help = S.help || {lesson: null};
 
 /* ---------- Pagalbiniai skaičiavimai pamokoms ---------- */
-const NEEDS = ["food", "home", "transport", "health", "loan", "insurance"];
+const NEEDS = ["food", "home", "utilities", "transport", "health", "loan", "insurance"];
 function helpStats() {
   const now = ymOf(todayISO());
   const months = [1, 2, 3].map(i => addMonths(now, -i));
@@ -160,13 +160,6 @@ const LESSONS = [
 
 /* ---------- Kaip veikia programėlė ---------- */
 const HELP_FAQ = [
-  ["Kaip programėlė priskiria kategorijas?", `<p>Kiekvienai operacijai programėlė tikrina eilės tvarka:</p><ol>
-    <li><b>Tavo taisyklės.</b> Jei kartą pakeitei kategoriją ir pažymėjai „Kitą kartą priskirti taip pat“, tai galioja visada.</li>
-    <li><b>Pervedimai tarp tavo sąskaitų:</b> tavo vardas, sąskaitos numeris (IBAN), banko pavadinimas ar ta pati suma kitos tavo sąskaitos išraše per 3 dienas.</li>
-    <li><b>Kaip anksčiau:</b> jei ta pati vieta jau buvo priskirta, naudojama ta pati kategorija.</li>
-    <li><b>Žinomos vietos ir suma:</b> parduotuvių, kavinių, degalinių ir kitų įmonių sąrašas. Degalinėse maža suma (iki 20 €) laikoma kava ar užkandžiu, didelė yra degalai.</li>
-    <li><b>AI patikra:</b> importuojant AI peržiūri visas grupes ir pataiso aiškiai klaidingas, nurodydamas priežastį.</li></ol>
-    <p>Neužtikrintos operacijos pažymimos geltonai. Jau įkeltas operacijas gali patikrinti skiltyje Kategorijos ir taisyklės → „Patikrinti kategorijas su AI“.</p>`],
   ["Kaip sekti kelias banko sąskaitas?", `<p>Kiekvieną banko sąskaitą laikyk atskira sąskaita programėlėje. Įkeliant išrašą programėlė pagal sąskaitos numerį ar banką pati parenka tinkamą sąskaitą, o jei failas iš naujos sąskaitos, pasiūlo ją sukurti vienu paspaudimu.</p>
     <p>Tada pervedimai tarp tavo sąskaitų nebus laikomi nei išlaidomis, nei pajamomis, o kiekvienos sąskaitos likutis bus teisingas. Sąskaitas tvarkyk skiltyje Daugiau → Sąskaitos ir skolos.</p>`],
   ["Kaip atsisiųsti išrašą iš banko?", () => `<p>Programėlė priima CSV, Excel (.xlsx) ir XML (ISO 20022, camt.053) išrašus. PDF netinka. Patogiausia išrašą atsisiųsti kompiuteryje.</p>
@@ -205,18 +198,22 @@ const GLOSSARY = [
 
 /* ---------- Vaizdai ---------- */
 function vHelp() {
-  const l = S.help.lesson && LESSONS.find(x => x.id === S.help.lesson);
-  if (l) return vLesson(l);
-  return `${subHead("Pagalba ir pamokos")}
+  return `${subHead("Pagalba")}
   <div class="tour-card"><span class="tc-ic">${icon("sparkle", 20)}</span>
     <span class="tc-t"><b>Mokomasis turas</b><small>Per minutę parodo, kur kas yra ir ką spausti.</small></span>
     <button class="btn small" id="runTour">Pradėti</button></div>
-  <div class="sec-h" style="margin-top:6px"><h2>Pamokos</h2><span class="aside">${LESSONS.length} metodai</span></div>
-  <div class="lessons">${LESSONS.map(x => `<button class="lesson" data-lesson="${x.id}"><span class="l-ic" style="background:var(--${x.col})">${icon(x.ic, 18)}</span><b>${esc(x.t)}</b><small>${esc(x.short)}</small></button>`).join("")}</div>
   <div class="sec-h" style="margin-top:6px"><h2>Kaip veikia programėlė</h2></div>
   <div class="faq">${HELP_FAQ.map(([q, a]) => `<details><summary>${esc(q)}</summary><div class="fa">${typeof a === "function" ? a() : a}</div></details>`).join("")}</div>
   <div class="sec-h" style="margin-top:6px"><h2>Sąvokų žodynėlis</h2></div>
-  <div class="faq gloss">${GLOSSARY.map(([k, v]) => `<div><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("")}</div>`;
+  <div class="faq gloss">${GLOSSARY.map(([k, v]) => `<div><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("")}</div>
+  <button class="tour-card" data-sub="lessons"><span class="tc-ic">${icon("book", 20)}</span><span class="tc-t"><b>Pamokos</b><small>Biudžeto metodai ir kaip juos pritaikyti</small></span><span class="chev">›</span></button>`;
+}
+function vLessons() {
+  const l = S.help.lesson && LESSONS.find(x => x.id === S.help.lesson);
+  if (l) return vLesson(l);
+  return `${subHead("Pamokos")}
+  <div class="fine" style="margin-top:-4px">Trumpos pamokos apie populiariausius biudžeto metodus: kas tai, kaip taikyti, ir kaip tai padaryti Kišenėje su tavo skaičiais.</div>
+  <div class="lessons">${LESSONS.map(x => `<button class="lesson" data-lesson="${x.id}"><span class="l-ic" style="background:var(--${x.col})">${icon(x.ic, 18)}</span><b>${esc(x.t)}</b><small>${esc(x.short)}</small></button>`).join("")}</div>`;
 }
 function vLesson(l) {
   const i = LESSONS.indexOf(l), prev = LESSONS[i - 1], next = LESSONS[i + 1];

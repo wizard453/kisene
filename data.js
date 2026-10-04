@@ -339,6 +339,28 @@ function recordBudgetChange() {
   S.cfg.budgets = {...out[out.length - 1].b};
   saveSettings("prefs");
 }
+/* ---------- Kategorijų atskyrimas (vieną kartą) ----------
+   „Būstas ir komunaliniai“ padalinta į „Būstas“ ir „Komunaliniai mokesčiai“, „Dovanos, grąžinimai“ į „Dovanos“ ir „Grąžinimai“. */
+function migrateCats() {
+  if (!S.loaded || S.demo || S.cfg.prefs?.catV >= 2) return;
+  const UTIL = KEYWORDS.find(k => k[0] === "utilities")[1], REPAY = INCOME_KEYWORDS.find(k => k[0] === "repay")[1];
+  const rows = [];
+  for (const t of S.txs.values()) {
+    const text = (t.note || "") + " " + (t.memo || "");
+    if (t.type === "exp" && t.cat === "home" && UTIL.test(text)) rows.push(txRow({...t, cat: "utilities"}));
+    else if (t.type === "inc" && t.cat === "gift" && REPAY.test(text)) rows.push(txRow({...t, cat: "repay"}));
+  }
+  if (rows.length) bulkUpsert("transactions", rows);
+  if (S.cfg.categories) {
+    S.cfg.categories = S.cfg.categories.map(c => c.id === "home" && c.name === "Būstas ir komunaliniai" ? {...c, name: "Būstas"} : c.id === "gift" && c.name === "Dovanos, grąžinimai" ? {...c, name: "Dovanos"} : c);
+    saveSettings("categories");
+  }
+  if ((S.cfg.recurring || []).some(r => r.cat === "home" && UTIL.test(r.note || ""))) {
+    S.cfg.recurring = S.cfg.recurring.map(r => r.cat === "home" && UTIL.test(r.note || "") ? {...r, cat: "utilities"} : r); saveSettings("recurring");
+  }
+  S.cfg.prefs = {...(S.cfg.prefs || {}), catV: 2}; saveSettings("prefs");
+  if (rows.length) setTimeout(() => toast(`Kategorijos patikslintos: ${rows.length} operacijos perkeltos į „Komunaliniai mokesčiai“ arba „Grąžinimai“`), 400);
+}
 function saveSettings(field, delay) {
   if (field === "budgets" && !S._budRestore) recordBudgetChange();
   if (field === "demo_dismissed") { enqueue({kind: "settings", fields: ["demo_dismissed"]}); return; }
@@ -389,7 +411,7 @@ function demoData() {
     add(5, "inc", "salary", 1850, "Atlyginimas");
     if (k % 2 === 0) add(18, "inc", "side", 120 + rnd() * 180, "Vertimo darbas");
     add(3, "exp", "home", 520, "Buto nuoma");
-    add(14, "exp", "home", 62 + rnd() * 40, "Ignitis");
+    add(14, "exp", "utilities", 62 + rnd() * 40, "Ignitis");
     add(9, "exp", "subs", 12.99, "Netflix"); add(11, "exp", "subs", 10.99, "Spotify");
     for (let w = 0; w < 4; w++) { add(2 + w * 7, "exp", "food", 35 + rnd() * 40, ["Maxima","Rimi","Lidl","IKI"][w]); add(5 + w * 7, "exp", "food", 14 + rnd() * 20, "Maxima"); }
     for (let w = 0; w < 3; w++) add(6 + w * 8, "exp", "transport", 8 + rnd() * 14, "Bolt");

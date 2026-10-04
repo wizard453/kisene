@@ -196,7 +196,7 @@ function navBack() {
   if (navStack.length) { history.back(); return true; }
   // istorijos nėra: grįžtam pagal hierarchiją
   if (S.sub && NAV_TRANSIENT.includes(S.sub)) return false;
-  if (S.sub === "help" && S.help?.lesson) { S.help.lesson = null; }
+  if ((S.sub === "help" || S.sub === "lessons") && S.help?.lesson) { S.help.lesson = null; }
   else if (S.sub) { if (S.tab === "invest" && S.sub === "chart") S.invView.tab = S.mkt.from === "portfolio" ? "portfolio" : "market"; S.sub = null; }
   else if (S.filter.imp || S.filter.cat) { S.filter = {...S.filter, imp: null, cat: null, year: null}; }
   else if (S.tab !== "overview") { const i = TAB_ORDER.indexOf(S.tab); S.tab = TAB_ORDER[Math.max(0, i - 1)]; }
@@ -223,11 +223,11 @@ function viewHtml() {
   if (S.tab === "overview") return vOverview();
   if (S.tab === "list") return vList();
   if (S.tab === "invest") return vInvest();
-  const subs = {ai: vAI, aicats: vAiCats, import: vImport, invimport: vInvImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp, together: vTogether, spendtrend: () => vTrend("exp"), inctrend: () => vTrend("inc")};
+  const subs = {lessons: vLessons, ai: vAI, aicats: vAiCats, import: vImport, invimport: vInvImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp, together: vTogether, spendtrend: () => vTrend("exp"), inctrend: () => vTrend("inc")};
   return (subs[S.sub] || vMore)();
 }
 async function render(fromData) {
-  if (S.loaded && S.cfg) ensureBudHist();
+  if (S.loaded && S.cfg) { ensureBudHist(); migrateCats(); }
   const signedIn = !!S.user && !S.recovery;
   $("#authScreen").hidden = signedIn; $("#appScreen").hidden = !signedIn; $("#tabs").hidden = !signedIn;
   if (!signedIn) {
@@ -393,6 +393,7 @@ document.addEventListener("click", async e => {
     S.recReview.items.push({id: "new:" + c.key, existing: false, cand: c, note: c.note, type: c.type, cat: c.cat, to_account_id: c.to_account_id, amount: c.amount, day: c.day, count: c.count, variable: c.variable, checked: true, manual: true});
     render(); toast(`„${c.note}“ pridėta prie pasikartojančių`); return;
   }
+  if (t.id === "pendAdd") { openPendAdd(); return; }
   if (d.gfilter && S.imp) { S.imp.gfilter = d.gfilter; render(); return; }
   switch (t.id) {
     case "fab": if (S.tab === "invest") openInvSheet(null); else openTxSheet(null); break;
@@ -565,6 +566,16 @@ document.addEventListener("change", async e => {
     S.invImp = imp; render(); return;
   }
   if (el.id === "impAcc" && S.imp) { if (el.value === "__new") createImportAccount(S.imp); else { S.imp.account_id = el.value; S.imp.overrides = {}; S.imp.suggestNew = false; } render(); return; }
+  if (el.dataset.pendtoggle) {
+    const id = el.dataset.pendtoggle, ym = ymOf(todayISO());
+    const auto = autoRecurring().find(r => r.id === id);
+    if (auto?.maybe && el.checked) { addRecurringFromCand(auto.cand); S.pendOpen = true; render(); return; }
+    const all = {...(S.cfg.prefs?.pendSkip || {})}; const cur = new Set(all[ym] || []);
+    if (el.checked) cur.delete(id); else cur.add(id);
+    // laikom tik einamąjį mėnesį
+    S.cfg.prefs = {...(S.cfg.prefs || {}), pendSkip: {[ym]: [...cur]}}; saveSettings("prefs");
+    S.pendOpen = true; render(); return;
+  }
   if (el.id === "aiImportAuto") { S.cfg.prefs = {...(S.cfg.prefs || {}), aiImport: el.checked}; saveSettings("prefs"); return; }
   if (el.id === "impLearn" && S.imp) { S.imp.learn = el.checked; return; }
   if (el.id === "impBal" && S.imp) { S.imp.setBalance = el.checked; return; }
@@ -575,6 +586,7 @@ document.addEventListener("change", async e => {
     return;
   }
   if (el.dataset.choice && S.imp) { bankOverride(el.dataset.choice, el.value); render(); return; }
+  if (el.dataset.dupchoice && S.imp) { S.imp.dupChoice[el.dataset.dupchoice] = el.value; render(); return; }
   if (el.dataset.gchoice !== undefined && S.imp) { groupOverride(+el.dataset.gchoice, el.value); render(); return; }
   if (el.dataset.reviewsel && el.value) { applyReview(el.dataset.reviewsel, el.value); return; }
   if (el.id === "fAcc") { S.filter.acc = el.value; $("#listBody").innerHTML = listBody(); return; }
@@ -708,3 +720,5 @@ if (sb) {
 }
 // kiekvieną dieną po vidurnakčio sukuriam pasikartojančias operacijas
 setInterval(() => { if (S.user) generateRecurring(); }, 60 * 60 * 1000);
+// „Laisvi pinigai“ laukiamų mokėjimų sąrašas lieka atidarytas po perpiešimo
+document.addEventListener("toggle", e => { if (e.target.classList?.contains("eq-pend")) S.pendOpen = e.target.open; }, true);

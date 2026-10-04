@@ -100,7 +100,8 @@ function moreItems() {
       ["review", "Be kategorijos", rv ? `${rv} laukia` : "Viskas sutvarkyta", "tag", "c4", rv],
       ["cats", "Kategorijos ir taisyklės", `${nRules} taisyklės`, "dots", "c8"]]},
     {group: "Pagalba", items: [
-      ["help", "Pagalba ir pamokos", "Kaip kas veikia, biudžeto metodai", "book", "c3"]]},
+      ["help", "Pagalba", "Kaip kas veikia, žodynėlis, turas", "chat", "c3"],
+      ["lessons", "Pamokos", "Biudžeto metodai ir patarimai", "book", "c6"]]},
     {group: "Nustatymai", items: [
       ["look", "Išvaizda", "Spalvos, tema, išdėstymas", "palette", "c12"],
       ["app", "Profilis", S.user?.email || "", "user", "c9"]]}

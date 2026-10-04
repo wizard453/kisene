@@ -6,11 +6,12 @@ const MONTHS = ["Sausis","Vasaris","Kovas","Balandis","Gegužė","Birželis","Li
 const MSHORT = ["Sau","Vas","Kov","Bal","Geg","Bir","Lie","Rgp","Rgs","Spa","Lap","Gru"];
 
 // Spalvų žetonai (styles.css: --c1 ... --c12)
-const SWATCHES = ["c1","c2","c3","c4","c5","c6","c7","c8","c10","c11","c12","c9"];
+const SWATCHES = ["c1","c2","c3","c4","c5","c6","c7","c8","c10","c11","c12","c13","c9"];
 
 const DEFAULT_CATEGORIES = [
   {id:"food", name:"Maistas", type:"exp", color:"c1"},
-  {id:"home", name:"Būstas ir komunaliniai", type:"exp", color:"c2"},
+  {id:"home", name:"Būstas", type:"exp", color:"c2"},
+  {id:"utilities", name:"Komunaliniai mokesčiai", type:"exp", color:"c13"},
   {id:"transport", name:"Transportas", type:"exp", color:"c3"},
   {id:"cafe", name:"Kavinės ir restoranai", type:"exp", color:"c4"},
   {id:"fun", name:"Pramogos ir sportas", type:"exp", color:"c5"},
@@ -24,7 +25,8 @@ const DEFAULT_CATEGORIES = [
   {id:"salary", name:"Atlyginimas", type:"inc", color:"c1"},
   {id:"grant", name:"Stipendija", type:"inc", color:"c3"},
   {id:"side", name:"Papildomos pajamos", type:"inc", color:"c4"},
-  {id:"gift", name:"Dovanos, grąžinimai", type:"inc", color:"c5"},
+  {id:"gift", name:"Dovanos", type:"inc", color:"c5"},
+  {id:"repay", name:"Grąžinimai", type:"inc", color:"c12", neutral:true},
   {id:"invinc", name:"Investicijų pajamos", type:"inc", color:"c7"},
   {id:"cashinc", name:"Gauta grynaisiais", type:"inc", color:"c6"},
   {id:"iother", name:"Kitos pajamos", type:"inc", color:"c9"}
@@ -46,11 +48,14 @@ const KEYWORDS = [
   ["transport", /autoaibe|bolt\.eu|\bbolt\b|uber|citybee|spark\b|\bjudu\b|trafi|m\.ticket|mticket|viešasis transport|viesasis transport|autobus|troleibus|stova|unipark|europark|parkuok|flowbird|parking|parkavim|taksi|e-tolling|vinjet|kelių mokest|keliu mokest|autodoc|inter cars|autoplius|padang|automobil|regitra|technin(ė|e) apžiūr|tech\.? apziur/i],
   ["subs", /netflix|spotify|youtube|apple\.com|icloud|google\s?(one|storage|play)|disney|\bhbo\b|\bmax\.com|go3|telia|\bbit[eė]\b|tele2|pildyk|ezys|adobe|chatgpt|openai|claude\.ai|anthropic|patreon|github|microsoft|dropbox|canva|duolingo|audible|storytel|\bdelfi\b|15min|lrytas|kindle/i],
   ["health", /vaistin|eurovaist|camelia|gintarin|\bbenu\b|antėja|anteja|klinik|odontolog|dantų|dantu|medical|medicin|\bmed\b|optik|labor|affidea|kardiolita|hila\b|sveikat|poliklinik|ligonin|psicholog|kineziterap|masaž|masaz/i],
-  ["home", /ignitis|enefit|elektrum|\beso\b|vandenys|šiluma|siluma|miesto gijos|energija|viena sąskaita|viena saskaita|nuoma|bendrij|būsto|busto|administrat|elektr|dujos|internetas|cgates|\binit\b|ecoservice|atliek/i],
+  // paskolos tikrinamos prieš būstą: „būsto kreditas“ yra paskola
+  ["loan", /lizing|leasing|paskol|kredit|sąskaita: ?bls|saskaita: ?bls|\bbls\d{6,}|būsto kredit|busto kredit|inbank|mokilizingas|general financing|bigbank|moment credit|\bsavy\b|ferratum|credit24|\bipf\b/i],
+  // komunaliniai tikrinami prieš būstą: jų sumos kinta kas mėnesį
+  ["utilities", /ignitis|enefit|elektrum|\beso\b|vandenys|šiluma|siluma|miesto gijos|vilniaus energija|kauno energija|energija|viena sąskaita|viena saskaita|elektr|dujos|šildym|sildym|karšt(o|as) vand|karst(o|as) vand|internetas|cgates|\binit\b|ecoservice|atliek|komunalin/i],
+  ["home", /nuoma|nuomos|bendrij|būsto admin|busto admin|administrat|namų valdym|namu valdym|daugiabu|būsto|busto|apartament|nekilnojam/i],
   ["fun", /kino|\bkinas\b|forum cinemas|multikino|apollo|arena|steam|playstation|xbox|nintendo|bilietai|tiketa|kakava|koncert|teatr|muziej|lemon gym|impuls|gym\+|\bgym\b|fitness|sport(o)? klub|baseinas|boulin|batut|escape|\bspa\b|vandens parkas|žaidim|zaidim/i],
   ["shop", /senukai|ermitaž|ermitaz|moki veži|moki vezi|jysk|ikea|depo\b|bauhaus|pigu|varle|varlė|temu|aliexpress|amazon|ebay|shein|zalando|about you|\bzara\b|h&m|\bhm\b|lindex|reserved|sinsay|pepco|action\b|decathlon|sportland|euronics|topo cent|bigbox|elektromarkt|drogas|eurokos|douglas|kika|apranga|mango\b|ccc\b|deichmann|tiger\b|flying tiger|jumbo|vinted|knygos|pegasas|vaga\b|humanitas/i],
   ["travel", /booking\.com|airbnb|kiwi\.com|ryanair|wizz|airbaltic|\blot\b|lufthansa|finnair|hotel|hostel|viešbut|viesbut|flixbus|ecolines|ltg link|lux express|oro uost|airport|skyscanner|trip\.com|expedia/i],
-  ["loan", /lizing|leasing|paskol|kredit|sąskaita: ?bls|saskaita: ?bls|\bbls\d{6,}|būsto kredit|busto kredit|inbank|mokilizingas|general financing|bigbank|moment credit|\bsavy\b|ferratum|credit24|\bipf\b/i],
   ["insurance", /banko mokestis|paslaugų plano|paslaugu plano|aptarnavimo mokest|komisin|draudim|insurance|\bergo\b|gjensidige|lietuvos draudimas|\bbta\b|compensa|if p&c|\bif\b draud|vmi\b|sodra|registrų centras|registru centras|savivaldyb|bauda|notar|antstol/i]
 ];
 // Degalinės: dideli pirkiniai yra degalai, maži dažniausiai kava ar užkandžiai
@@ -61,7 +66,9 @@ const INCOME_KEYWORDS = [
   ["grant", /stipend/i],
   ["invinc", /dividend|palūkan|palukan|interest|trading ?212|revolut securities|lightyear|interactive brokers|\bibkr\b/i],
   ["side", /honorar|autorin|sąskait(a|os) faktūr|saskait(a|os) faktur|\bsf\b|vinted|individual(i|ios) veikl/i],
-  ["gift", /grąžin|grazin|refund|kompensac|dovan|gimtadien/i]
+  // grąžinimai nėra pajamos: skolos grąžinimas ar pinigų grąžinimas už prekę
+  ["repay", /skol(os|ą|a|ų)? grąžin|skol(os|ą|a|ų)? grazin|grąžin|grazin|refund|grąžinam|atgal už|atgal uz|return of/i],
+  ["gift", /dovan|gimtadien|kalėd|kaled|vestuv|krikšt|kriksti/i]
 ];
 // Kategorija išlaidoms pagal tekstą ir sumą. sure=false reiškia, kad verta patikrinti.
 function guessExpCat(text, amount) {
@@ -73,6 +80,9 @@ function guessExpCat(text, amount) {
   return {cat: "other", sure: false};
 }
 
+// Pajamų kategorijos, kurios nėra pajamos (pvz. grąžinta skola)
+const isNeutralInc = cat => cat === "repay" || !!(typeof catById === "function" && catById(cat)?.neutral);
+const isRealInc = t => t.type === "inc" && !isNeutralInc(t.cat);
 const fmt = new Intl.NumberFormat("lt-LT", {style:"currency", currency:"EUR"});
 const fmt0 = new Intl.NumberFormat("lt-LT", {style:"currency", currency:"EUR", maximumFractionDigits:0});
 const fmtN = new Intl.NumberFormat("lt-LT", {maximumFractionDigits:6});
@@ -213,6 +223,7 @@ function toast(msg, undo) {
 /* ---------- Ikonos (24×24, linijinės) ---------- */
 const ICONS = {
   basket: '<path d="M4 9h16l-1.5 10.5a1 1 0 0 1-1 .5h-11a1 1 0 0 1-1-.5z"/><path d="M8 9l4-5 4 5"/>',
+  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-5h4v5"/>',
   car: '<path d="M5 16V12l2-5h10l2 5v4"/><path d="M4 16h16"/><circle cx="8" cy="17.5" r="1.5"/><circle cx="16" cy="17.5" r="1.5"/>',
   cup: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h2a2 2 0 0 1 0 4h-2"/><path d="M9 3v3M12 3v3"/>',
@@ -250,7 +261,7 @@ const ICONS = {
   send: '<path d="M4 12l16-8-6 16-3-7z"/>'
 };
 const CAT_ICONS = {food: "basket", home: "home", transport: "car", cafe: "cup", fun: "ticket", subs: "repeat", health: "heart", shop: "bag", travel: "plane",
-  loan: "bank", insurance: "shield", other: "dots", salary: "briefcase", grant: "cap", side: "coin", gift: "gift", iother: "arrowin", transfer: "swap", invinc: "percent", cashinc: "receipt"};
-const ICON_CHOICES = ["tag", "basket", "home", "car", "cup", "ticket", "repeat", "heart", "bag", "plane", "bank", "shield", "briefcase", "cap", "coin", "gift", "paw", "book", "child", "receipt", "percent"];
+  loan: "bank", insurance: "shield", other: "dots", salary: "briefcase", grant: "cap", side: "coin", gift: "gift", repay: "swap", utilities: "bolt", iother: "arrowin", transfer: "swap", invinc: "percent", cashinc: "receipt"};
+const ICON_CHOICES = ["tag", "basket", "home", "bolt", "car", "cup", "ticket", "repeat", "heart", "bag", "plane", "bank", "shield", "briefcase", "cap", "coin", "gift", "paw", "book", "child", "receipt", "percent"];
 const icon = (name, size) => `<svg viewBox="0 0 24 24" width="${size || 18}" height="${size || 18}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.tag}</svg>`;
 const catIcon = c => icon(c.icon || CAT_ICONS[c.id] || "tag");

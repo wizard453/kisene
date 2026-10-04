@@ -3,7 +3,7 @@
 
 const ovCard = rx => () => [...$$("#view section.card")].find(s => rx.test(s.querySelector("h2")?.textContent || ""));
 const TOUR = [
-  {title: "Sveikas atvykęs į Kišenę!", text: "Per minutę parodysiu, kur kas yra ir ką spausti. Turą gali bet kada praleisti, o vėl jį paleisi skiltyje Daugiau → Pagalba ir pamokos."},
+  {title: "Sveikas atvykęs į Kišenę!", text: "Per minutę parodysiu, kur kas yra ir ką spausti. Turą gali bet kada praleisti, o vėl jį paleisi skiltyje Daugiau → Pagalba."},
   {tab: "overview", sel: ".hero, .sum", title: "Laisvi pinigai", text: "Čia matai, kiek dar gali išleisti ar atsidėti iki mėnesio pabaigos: pajamos atėmus tai, kas jau išleista, ir mokėjimus, kurie dar laukia."},
   {tab: "overview", sel: "#monthBox", title: "Mėnesio pasirinkimas", text: "Rodyklėmis pereini į gretimą mėnesį. Paspaudęs mėnesio pavadinimą atsidarys langas, kuriame pasirinksi bet kurį metų mėnesį."},
   {tab: "overview", sel: ovCard(/Kur keliauja/), title: "Kur keliauja pinigai", text: "Išlaidos pagal kategorijas ir biudžetų juostos. Paspaudęs kategoriją pamatysi jos operacijas, o „i“ mygtukas paaiškina, kas kortelėje rodoma."},
@@ -18,7 +18,8 @@ const TOUR = [
   {tab: "more", sel: '.mi[data-sub="together"]', title: "Bendra paskyra", text: "Susiek paskyrą su partneriu: matysite bendrą biudžetą ir galėsite kartu taupyti bendriems tikslams. Kiekvienas pats renkasi, ką rodyti."},
   {tab: "more", sel: '.mi[data-sub="budgets"]', title: "Biudžetai ir tikslai", text: "Nustatyk mėnesio ribas kategorijoms ir taupymo tikslus. Artėjant prie ribos ar ją viršijus, varpelyje atsiras įspėjimas."},
   {tab: "more", sel: '.mi[data-sub="ai"]', title: "AI patarėjas", text: "Klausk apie savo finansus arba paprašyk pakeisti nustatymus, pvz. „nustatyk kavinėms 80 € ribą“. Pokalbis neišsaugomas: uždarius programėlę jis dingsta."},
-  {tab: "more", sel: '.mi[data-sub="help"]', title: "Pagalba ir pamokos", text: "Atsakymai, kaip kas veikia, sąvokų žodynėlis ir pamokos apie biudžeto metodus. Iš čia gali vėl paleisti šį turą."},
+  {tab: "more", sel: '.mi[data-sub="help"]', title: "Pagalba", text: "Atsakymai, kaip kas veikia, ir sąvokų žodynėlis. Iš čia gali vėl paleisti šį turą."},
+  {tab: "more", sel: '.mi[data-sub="lessons"]', title: "Pamokos", text: "Pamokos apie biudžeto metodus, pvz. 50/30/20, su tavo skaičiais ir patarimais, kaip juos taikyti."},
   {tab: "overview", title: "Viskas paruošta!", text: "Pradėk nuo banko išrašo importo arba pridėk pirmą operaciją pliuso mygtuku. Sėkmės!"}
 ];
 let tourStep = -1;

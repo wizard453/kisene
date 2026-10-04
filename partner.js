@@ -38,7 +38,7 @@ function pAgg(ym) {
   const a = {inc: 0, exp: 0, byCat: {}};
   for (const t of S.partner?.txs || []) {
     if (ymOf(t.date) !== ym) continue;
-    if (t.type === "inc") a.inc += t.amount;
+    if (isRealInc(t)) a.inc += t.amount;
     else if (t.type === "exp") { a.exp += t.amount; a.byCat[t.cat] = (a.byCat[t.cat] || 0) + t.amount; }
   }
   return a;
