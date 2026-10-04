@@ -307,9 +307,16 @@ const BUD0 = "0000-00";
 const nowYm = () => ymOf(todayISO());
 const budHist = () => Array.isArray(S.cfg.prefs?.budgetHist) && S.cfg.prefs.budgetHist.length ? S.cfg.prefs.budgetHist : null;
 function ensureBudHist() {
-  if (budHist()) return;
-  // pirmas kartas: visos esamos ribos laikomos galiojusiomis visada
-  S.cfg.prefs = {...(S.cfg.prefs || {}), budgetHist: [{from: BUD0, b: {...(S.cfg.budgets || {})}}]};
+  const h = budHist();
+  if (h && S.cfg.prefs.budHistV === 2) return;
+  // Iki istorijos atsiradimo nustatytos ribos galioja nuo šio mėnesio. Praėję mėnesiai lieka be ribų,
+  // nes nežinoma, kokios ribos tada buvo, ir jie neturi būti rodomi kaip viršyti.
+  const m = nowYm(), base = h ? h[0].b : (S.cfg.budgets || {});
+  const byFrom = new Map([[BUD0, {}], [m, {...base}]]);
+  for (const e of (h || []).slice(1)) byFrom.set(e.from, {...e.b});
+  const out = [...byFrom].sort((a, b) => a[0].localeCompare(b[0])).map(([from, b]) => ({from, b}));
+  S.cfg.prefs = {...(S.cfg.prefs || {}), budgetHist: out.filter((e, i) => i === 0 || !sameBud(e.b, out[i - 1].b)), budHistV: 2};
+  if (h) saveSettings("prefs");
 }
 function budgetsFor(ym) {
   const h = budHist(); if (!h) return S.cfg.budgets || {};

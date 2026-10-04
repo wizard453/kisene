@@ -524,7 +524,8 @@ document.addEventListener("touchstart", e => { pullY = e.touches.length === 1 ? 
 document.addEventListener("touchmove", e => {
   if (e.touches.length > 1) { e.preventDefault(); return; }
   const dy = e.touches[0].clientY - pullY, dx = Math.abs(e.touches[0].clientX - pullX);
-  if (pullY == null || window.scrollY > 0 || dy <= 0 || dx > dy) return;
+  // mažas piršto judesys bakstelint nelaikomas tempimu, kitaip Android praryja paspaudimą
+  if (pullY == null || window.scrollY > 0 || dy <= 12 || dx > dy || tourActive()) return;
   // leidžiam slinkti vidiniams sąrašams (pvz. lapams), jei jie dar ne viršuje
   for (let n = e.target; n && n !== document.body; n = n.parentElement) if (n.scrollTop > 0) return;
   if (e.cancelable) e.preventDefault();

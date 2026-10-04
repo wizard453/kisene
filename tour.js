@@ -45,7 +45,12 @@ function endTour() {
   go("overview");
 }
 async function tourShow() {
+  try { await tourShowStep(); }
+  catch (e) { console.error(e); tourPlace(); }
+}
+async function tourShowStep() {
   const st = TOUR[tourStep];
+  $("#sheetRoot").innerHTML = "";
   const invTab = st.inv || "portfolio";
   if (st.tab && (S.tab !== st.tab || S.sub || (st.tab === "invest" && S.invView.tab !== invTab))) {
     S.tab = st.tab; S.sub = null; S.confirm = null;
@@ -92,13 +97,19 @@ function tourPlace() {
   const th = tip.offsetHeight, below = top + h + 14;
   tip.style.top = (below + th < innerHeight - 12 ? below : Math.max(12, top - th - 14)) + "px";
 }
-document.addEventListener("click", e => {
+// Turo mygtukai reaguoja ir į „pointerup“: kai kurie Android telefonai praryja „click“ po mažo piršto judesio
+let tourTapAt = 0;
+function tourButton(e) {
   const b = e.target.closest("[data-tour]"); if (!b) return;
   e.stopPropagation();
+  if (e.type === "pointerup") { if (e.pointerType === "mouse") return; tourTapAt = Date.now(); }
+  else if (Date.now() - tourTapAt < 700) return;
   const a = b.dataset.tour;
   if (a === "skip") { endTour(); return; }
   if (a === "back") { tourStep = Math.max(0, tourStep - 1); tourShow(); return; }
   if (tourStep >= TOUR.length - 1) { endTour(); return; }
   tourStep++; tourShow();
-}, true);
+}
+document.addEventListener("pointerup", tourButton, true);
+document.addEventListener("click", tourButton, true);
 window.addEventListener("scroll", () => { if (tourActive()) requestAnimationFrame(tourPlace); }, {passive: true});
