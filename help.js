@@ -160,6 +160,15 @@ const LESSONS = [
 
 /* ---------- Kaip veikia programėlė ---------- */
 const HELP_FAQ = [
+  ["Kaip programėlė priskiria kategorijas?", `<p>Kiekvienai operacijai programėlė tikrina eilės tvarka:</p><ol>
+    <li><b>Tavo taisyklės.</b> Jei kartą pakeitei kategoriją ir pažymėjai „Kitą kartą priskirti taip pat“, tai galioja visada.</li>
+    <li><b>Pervedimai tarp tavo sąskaitų:</b> tavo vardas, sąskaitos numeris (IBAN), banko pavadinimas ar ta pati suma kitos tavo sąskaitos išraše per 3 dienas.</li>
+    <li><b>Kaip anksčiau:</b> jei ta pati vieta jau buvo priskirta, naudojama ta pati kategorija.</li>
+    <li><b>Žinomos vietos ir suma:</b> parduotuvių, kavinių, degalinių ir kitų įmonių sąrašas. Degalinėse maža suma (iki 20 €) laikoma kava ar užkandžiu, didelė yra degalai.</li>
+    <li><b>AI patikra:</b> importuojant AI peržiūri visas grupes ir pataiso aiškiai klaidingas, nurodydamas priežastį.</li></ol>
+    <p>Neužtikrintos operacijos pažymimos geltonai. Jau įkeltas operacijas gali patikrinti skiltyje Kategorijos ir taisyklės → „Patikrinti kategorijas su AI“.</p>`],
+  ["Kaip sekti kelias banko sąskaitas?", `<p>Kiekvieną banko sąskaitą laikyk atskira sąskaita programėlėje. Įkeliant išrašą programėlė pagal sąskaitos numerį ar banką pati parenka tinkamą sąskaitą, o jei failas iš naujos sąskaitos, pasiūlo ją sukurti vienu paspaudimu.</p>
+    <p>Tada pervedimai tarp tavo sąskaitų nebus laikomi nei išlaidomis, nei pajamomis, o kiekvienos sąskaitos likutis bus teisingas. Sąskaitas tvarkyk skiltyje Daugiau → Sąskaitos ir skolos.</p>`],
   ["Kaip atsisiųsti išrašą iš banko?", () => `<p>Programėlė priima CSV, Excel (.xlsx) ir XML (ISO 20022, camt.053) išrašus. PDF netinka. Patogiausia išrašą atsisiųsti kompiuteryje.</p>
     ${BANK_GUIDES.map(b => `<p><b>${esc(b.n)}</b> · ${esc(b.f)}</p><ol>${b.steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>`).join("")}
     <p>Bankai kartais pakeičia meniu pavadinimus. Jei nerandi, ieškok „Sąskaitos išrašas“. Failą įkelk skiltyje Daugiau → Banko išrašo importas.</p>`],

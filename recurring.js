@@ -71,7 +71,7 @@ function recCand(g, strong) {
   const spread = (Math.max(...g.amts) - Math.min(...g.amts)) / (g.med || 1);
   return {key: g.key, type: g.type, note: g.note, cat: g.cat, account_id: g.last.account_id, to_account_id: g.to_account_id,
     amount: r2(g.txs.slice(-3).reduce((s, t) => s + t.amount, 0) / Math.min(3, g.txs.length)), day: Math.min(28, +g.last.date.slice(8)),
-    variable: spread > 0.1, count: g.txs.length, months: g.months.size, last: g.last.date, strong};
+    variable: spread > 0.1, count: g.txs.length, months: g.months.size, last: g.last.date, strong, ids: g.txs.map(t => t.id)};
 }
 const BILL_CATS = ["home", "subs", "loan", "insurance"];
 const EVERYDAY_CATS = ["food", "cafe", "transport", "shop", "travel"];
@@ -117,11 +117,13 @@ function allRecCandidates(accountId) {
 function prepareRecReview(imported, accountId) {
   const recs = (S.cfg.recurring || []).filter(r => recMode(r) === "plan" || (r.account_id === accountId && accById(accountId)?.kind !== "cash"));
   const lastImport = imported.reduce((m, t) => t.date > m ? t.date : m, "");
+  const impIds = new Set(imported.map(t => t.id));
   const items = [];
   // esami
   for (const r of recs) {
-    if (accountId && r.type !== "trf" && r.account_id && r.account_id !== accountId) continue;
+    // tik šios sąskaitos mokėjimai: kitų sąskaitų išrašų mokėjimai čia nerodomi
     const hits = imported.filter(t => recMatches(r, t)).sort((a, b) => b.date.localeCompare(a.date));
+    if (accountId && r.account_id ? r.account_id !== accountId : !hits.length) continue;
     const all = [...S.txs.values()].filter(t => recMatches(r, t)).sort((a, b) => b.date.localeCompare(a.date));
     const lastSeen = all[0]?.date || null;
     const stale = lastImport && (!lastSeen || monthsBetween(ymOf(lastSeen), ymOf(lastImport)) >= 2);
@@ -130,6 +132,8 @@ function prepareRecReview(imported, accountId) {
   }
   // nauji
   for (const c of detectRecurring(accountId)) {
+    // tik tie, kurie yra ką tik įkeltame faile
+    if (!c.ids.some(id => impIds.has(id))) continue;
     const fake = {id: "_", type: c.type, note: c.note, match: c.note, account_id: c.account_id, to_account_id: c.to_account_id, amount: c.amount, variable: c.variable};
     if ((S.cfg.recurring || []).some(r => recMatches(r, {type: c.type, note: c.note, memo: "", amount: c.amount, account_id: c.account_id, to_account_id: c.to_account_id}) || recMatches(fake, {type: r.type, note: r.note || "", memo: "", amount: r.amount, account_id: r.account_id, to_account_id: r.to_account_id}))) continue;
     if ((S.cfg.prefs?.notRecurring || []).includes(c.key)) continue;

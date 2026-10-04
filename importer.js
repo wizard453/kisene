@@ -67,8 +67,55 @@ async function readBankFile(f) {
   }
   return text;
 }
+/* Iš kurios sąskaitos failas: IBAN ir bankas. Pagal juos parenkama programėlės sąskaita. */
+const LT_BANK_CODES = {"73000": "Swedbank", "70440": "SEB", "40100": "Luminor", "21400": "Luminor", "71800": "Artea", "72900": "Citadele", "72300": "Medicinos bankas", "32500": "Revolut", "35000": "Paysera", "70100": "Urbo bankas"};
+const bankOfIban = ib => ib && /^LT\d{18}$/.test(ib) ? LT_BANK_CODES[ib.slice(4, 9)] || "" : "";
+const maskIban = ib => ib ? ib.slice(0, 4) + " … " + ib.slice(-4) : "";
+function detectFileAccount(imp) {
+  let ib = normIban(imp.ownIban || "");
+  if (!ib) {
+    const c = imp.header.findIndex(h => /^(sąskaitos nr\.?|saskaitos nr\.?|sąskaita|saskaita|account( number)?|iban|sąskaitos numeris)$/i.test(String(h || "").trim()));
+    if (c >= 0) for (const r of imp.rows.slice(0, 20)) { const v = normIban(r[c]); if (/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(v)) { ib = v; break; } }
+  }
+  imp.fileIban = ib || "";
+  imp.fileBank = bankOfIban(ib) || (imp.preset === "revolut" ? "Revolut" : imp.preset === "swedbank" ? "Swedbank" : "");
+}
+// Kuriai sąskaitai priskirti failą: pagal IBAN, banko pavadinimą arba tuščią pagrindinę sąskaitą
+function chooseImportAccount(imp) {
+  const accs = activeAccounts().filter(a => a.kind !== "cash" && a.kind !== "loan" && a.kind !== "invest");
+  if (imp.fileIban) { const a = accs.find(x => normIban(x.iban) === imp.fileIban || (x.ownIbans || []).includes(imp.fileIban)); if (a) return a.id; }
+  if (imp.fileBank) { const a = accs.find(x => x.name.toLowerCase().includes(imp.fileBank.toLowerCase()) && !(x.ownIbans || []).length); if (a) return a.id; }
+  const used = new Set([...S.txs.values()].map(t => t.account_id));
+  const main = accById("main");
+  if (main && !used.has("main") && !(main.ownIbans || []).length) return "main";
+  if (imp.fileIban || imp.fileBank) { imp.suggestNew = true; return accs.find(x => !used.has(x.id))?.id || "main"; }
+  return "main";
+}
+// Ar pasirinkta sąskaita atrodo kita nei failo (kitas IBAN arba kitas bankas)
+function accountMismatch(imp) {
+  const a = accById(imp.account_id); if (!a) return false;
+  if (imp.fileIban && (a.ownIbans || []).length) return !(a.ownIbans || []).includes(imp.fileIban);
+  const bankInName = BANK_NAMES.find(([, re]) => re.test(a.name));
+  if (imp.fileBank && bankInName) return !new RegExp(bankInName[1].source, "i").test(imp.fileBank);
+  return false;
+}
+function createImportAccount(imp) {
+  ensureCfg("accounts");
+  const base = imp.fileBank || "Nauja sąskaita";
+  let name = base, n = 2;
+  while (activeAccounts().some(a => a.name.toLowerCase() === name.toLowerCase())) name = base + " " + n++;
+  const acc = {id: shortId(), name, kind: "bank", match: "", ownIbans: imp.fileIban ? [imp.fileIban] : []};
+  S.cfg.accounts = [...S.cfg.accounts, acc]; saveSettings("accounts");
+  imp.account_id = acc.id; imp.overrides = {}; imp.suggestNew = false;
+  toast(`Sukurta sąskaita „${name}“. Pavadinimą pakeisi skiltyje Sąskaitos.`);
+}
 async function bankSetupFile(f) {
-  try { const imp = bankSetup(f.name, await readBankFile(f)); if (imp && fileMeta) Object.assign(imp, fileMeta); return imp; }
+  try {
+    const imp = bankSetup(f.name, await readBankFile(f)); if (!imp) return imp;
+    if (fileMeta) Object.assign(imp, fileMeta);
+    detectFileAccount(imp); imp.account_id = chooseImportAccount(imp);
+    return imp;
+  }
   catch (e) { toast(e.message || "Nepavyko perskaityti failo"); return undefined; }
 }
 /* Kaip atsisiųsti išrašą iš Lietuvos bankų. Meniu pavadinimai gali skirtis, nes bankai atnaujina savo sistemas. */
@@ -212,22 +259,38 @@ function findPair(c, imp) {
   }
   return best;
 }
-function classifyBank(c, imp) {
+// Kaip ta pati vieta buvo priskirta anksčiau (įskaitant tavo pataisymus). Grąžina dažniausią kategoriją.
+function histChoice(imp, note, dir) {
+  if (!imp._hist) {
+    imp._hist = new Map();
+    for (const t of S.txs.values()) {
+      if (t.type !== "exp" && t.type !== "inc") continue;
+      const k = recRoot(t.note) + "|" + t.type; if (k.startsWith("|")) continue;
+      const m = imp._hist.get(k) || {}; m[t.cat] = (m[t.cat] || 0) + 1; imp._hist.set(k, m);
+    }
+  }
+  const m = imp._hist.get(recRoot(note) + "|" + (dir === "in" ? "inc" : "exp")); if (!m) return null;
+  const [cat, n] = Object.entries(m).sort((a, b) => b[1] - a[1])[0];
+  const total = Object.values(m).reduce((a, b) => a + b, 0);
+  if (cat === "other" || cat === "iother" || n < total * 0.6) return null;
+  return cat;
+}
+function classifyBank0(c, imp) {
   const text = `${c.party} ${c.desc}`;
   const low = text.toLowerCase();
   const note = cleanMerchant(c.party || c.desc) || (c.dir === "in" ? "Pajamos" : "Išlaidos");
   const res = {id: c.id, date: c.date, amount: c.amount, note, memo: maskCards(c.desc), account_id: imp.account_id, dir: c.dir, iban: c.iban || ""};
   const trf = (other, why, sure = true) => ({...res, type: "trf", cat: "transfer", account_id: c.dir === "out" ? imp.account_id : (other || null), to_account_id: c.dir === "out" ? (other || null) : imp.account_id, why, sure});
   const ov = imp.overrides[c.id];
-  if (ov) return {...applyChoice(res, ov, c.dir, imp), sure: true, ai: imp.aiPicked?.has(c.id)};
+  if (ov) return {...applyChoice(res, ov, c.dir, imp), sure: true, ai: imp.aiPicked?.has(c.id), why: imp.aiWhy?.[c.id] || ""};
   // vartotojo taisyklės turi pirmenybę
   const ruled = categorize(text, c.dir, c.amount);
   if (ruled.rule) return ruled.type === "trf" ? trf(ruled.to_account_id, "tavo taisyklė") : {...res, type: ruled.type, cat: ruled.cat, sure: true, why: "tavo taisyklė"};
   // kito asmens sąskaita yra viena iš tavo sąskaitų
   if (c.iban) {
-    const a = activeAccounts().find(x => x.id !== imp.account_id && (normIban(x.iban) === c.iban || (x.ibans || []).includes(c.iban)));
+    const a = activeAccounts().find(x => x.id !== imp.account_id && (normIban(x.iban) === c.iban || (x.ibans || []).includes(c.iban) || (x.ownIbans || []).includes(c.iban)));
     if (a) return trf(a.id, "tavo sąskaitos IBAN");
-    if (imp.ownIban && c.iban === normIban(imp.ownIban)) return {...res, type: "skip"};
+
   }
   // tavo vardas kaip gavėjas ar mokėtojas
   const toks = ownTokens(S.cfg.prefs?.ownName || imp.ownerName);
@@ -255,7 +318,11 @@ function classifyBank(c, imp) {
   // banko pavadinimas tekste, išskyrus paties išrašo banką (mokėjimai savo bankui yra mokesčiai ar paskolos)
   const curName = (accById(imp.account_id)?.name || "") + " " + (imp.preset === "swedbank" ? "swedbank" : imp.preset === "revolut" ? "revolut" : "");
   const hintBank = BANK_NAMES.some(([, re]) => re.test(text) && !re.test(curName));
-  const g = categorize(text, c.dir, c.amount);
+  let g = categorize(text, c.dir, c.amount);
+  // anksčiau ta pati vieta priskirta kitai kategorijai: naudojam tai (degalinėms ne, nes ten lemia suma)
+  const hc = FUEL_RE.test(text) ? null : histChoice(imp, note, c.dir);
+  if (hc && hc !== g.cat) g = {...g, cat: hc, sure: true, why: "kaip anksčiau"};
+  else if (hc) g = {...g, sure: true};
   // tas pats pervedimas jau matytas kitos sąskaitos išraše
   if (hintWords || hintBank || (!g.sure && c.amount >= 50)) {
     const pair = findPair(c, imp);
@@ -272,6 +339,18 @@ function classifyBank(c, imp) {
   // banko pavadinimas: jei turi tokio banko sąskaitą, tai papildymas. Jei ne, gali būti ir apmokėjimas, todėl pažymima patikrinti.
   if (hintBank && !g.sure) { const a = accByHint(low, imp.account_id); return trf(a?.id || null, a ? "papildymas į „" + a.name + "“" : "banko pavadinimas", !!a); }
   return {...res, type: g.type, cat: g.cat, sure: g.sure, why: g.why};
+}
+// Pervedimas, kurio kita pusė anksčiau nebuvo žinoma, sujungiamas su šio išrašo operacija
+function classifyBank(c, imp) {
+  const r = classifyBank0(c, imp);
+  if (r.type === "trf" && !r.pairWith && !imp.overrides[c.id]) {
+    const pair = findPair(c, imp);
+    if (pair && pair.t.type === "trf") {
+      imp._paired.add(pair.t.id);
+      return {...r, account_id: c.dir === "out" ? imp.account_id : pair.acc, to_account_id: c.dir === "out" ? pair.acc : imp.account_id, pairWith: pair.t.id, sure: true, why: "sujungta su įrašu kitoje tavo sąskaitoje"};
+    }
+  }
+  return r;
 }
 function applyChoice(res, choice, dir, imp) {
   if (choice === "skip") return {...res, type: "skip"};
@@ -440,7 +519,7 @@ function vImpGroup(g, i, open) {
   const sign = g.dir === "in" ? "+" : "−";
   return `<div class="ig ${g.sure ? "" : "unsure"} ${r.type === "trf" ? "trf" : ""}">
     <div class="ig-h"><div class="ig-t"><b>${esc(g.note)}</b><small>${n > 1 ? `${n} operacijos · ${dayLabel(ds[0])}–${dayLabel(ds[n - 1])}` : dayLabel(ds[0])}</small></div><b class="num ${g.dir === "in" ? "pos" : ""}">${sign}${eur(g.total)}</b></div>
-    ${!g.sure ? `<div class="ig-why">Patikrink${g.why ? `: ${esc(g.why)}` : ", kategorija atspėta neužtikrintai"}</div>` : g.ai ? `<div class="ig-why ai">Pakeitė AI</div>` : r.type === "trf" && g.why ? `<div class="ig-why info">Atpažinta kaip pervedimas: ${esc(g.why)}</div>` : ""}
+    ${!g.sure ? `<div class="ig-why">Patikrink${g.why ? `: ${esc(g.why)}` : ", kategorija atspėta neužtikrintai"}</div>` : g.ai ? `<div class="ig-why ai">Pakeitė AI${g.why ? `: ${esc(g.why)}` : ""}</div>` : r.type === "trf" && g.why ? `<div class="ig-why info">Atpažinta kaip pervedimas: ${esc(g.why)}</div>` : ""}
     <select class="ig-sel" data-gchoice="${i}" aria-label="Kategorija">${choiceOptions(r)}</select>
     ${n > 1 ? `<details ${open ? "open" : ""}><summary>Rodyti operacijas (${n})</summary><div class="ig-rows">${g.rows.map(x => `<div class="ig-row"><span class="num">${dayLabel(x.date)}</span><span class="ig-m">${esc((x.memo || x.note).slice(0, 70))}</span><b class="num">${sign}${eur(x.amount)}</b>
       <select class="mini-sel" data-choice="${x.id}">${choiceOptions(x)}</select></div>`).join("")}</div></details>` : `<div class="ig-m1">${esc((r.memo || "").slice(0, 90))}</div>`}
@@ -455,7 +534,7 @@ async function vImport() {
     ${!(S.cfg.prefs?.ownName) ? `<div class="hint">Patarimas: skiltyje <button class="linkbtn" data-sub="app">Profilis</button> įrašyk savo vardą ir pavardę. Tada pervedimai sau į kitus bankus bus atpažinti automatiškai.</div>` : ""}
   </div><div class="set-group">${vBankGuide(!importGroups("bank").length)}</div>` + vImportsList("bank");
   const {cands, skipped, balances} = await bankCandidates(imp);
-  imp.balances = balances; imp._paired = new Set();
+  imp.balances = balances; imp._paired = new Set(); imp._hist = null;
   const rows = cands.map(c => classifyBank(c, imp));
   const dupT = rows.filter(isDuplicateTransfer);
   const existing = rows.filter(r => S.txs.has(r.id));
@@ -471,9 +550,14 @@ async function vImport() {
   const mapOk = imp.map.date >= 0 && imp.map.amt >= 0;
   const f = imp.gfilter || "all";
   const shown = f === "unsure" ? unsure : f === "trf" ? groups.filter(g => g.rows[0].type === "trf") : f === "inc" ? groups.filter(g => g.dir === "in" && g.rows[0].type !== "trf") : groups;
+  // AI tikrinimas paleidžiamas automatiškai, kai failas nuskaitytas (galima išjungti)
+  if (!imp.ai && fresh.length && S.cfg.prefs?.aiImport !== false && imp.map.date >= 0 && imp.map.amt >= 0) setTimeout(() => { if (S.imp === imp && !imp.ai) aiCheckImport(true); }, 50);
   const ai = imp.ai || {};
   body += `<div class="set-group imp-file"><div class="row" style="justify-content:space-between;align-items:center"><div class="fine"><b>${esc(imp.name)}</b>${known ? ` · ${known}` : ""}</div><button class="linkbtn" id="impCancel">Keisti failą</button></div>
-    <label class="field">Kurios sąskaitos išrašas<select id="impAcc">${accOptions(imp.account_id)}</select></label></div>
+    ${imp.fileIban || imp.fileBank ? `<div class="fine">Failas iš: <b>${esc(imp.fileBank || "banko")}</b>${imp.fileIban ? ` · ${maskIban(imp.fileIban)}` : ""}</div>` : ""}
+    <label class="field">Į kurią sąskaitą įkelti<select id="impAcc">${accOptions(imp.account_id)}<option value="__new">+ Nauja sąskaita${imp.fileBank ? ` „${esc(imp.fileBank)}“` : ""}</option></select></label>
+    ${imp.suggestNew || accountMismatch(imp) ? `<div class="hint warn">Šis išrašas atrodo iš kitos sąskaitos nei „${esc(accName(imp.account_id))}“. Kad kiekvienos sąskaitos likutis ir pervedimai tarp jų būtų teisingi, įkelk jį į atskirą sąskaitą.
+      <div class="row" style="margin-top:8px"><button class="btn small" id="impNewAcc">Sukurti sąskaitą${imp.fileBank ? ` „${esc(imp.fileBank)}“` : ""}</button></div></div>` : ""}</div>
   <div class="impsteps"><span class="${!mapOk ? "on" : "done"}">1. Failas</span><span class="${mapOk ? "on" : ""}">2. Kategorijos</span><span>3. Importas</span></div>
   <section class="card istep"><div class="sec-h"><h2>1. Ar failas nuskaitytas teisingai?</h2></div>
     ${known && mapOk ? `<div class="fine">Failas atpažintas automatiškai. Žemiau matai, kaip atrodys pirmos operacijos. Jei viskas gerai, nieko keisti nereikia.</div>`
@@ -486,7 +570,8 @@ async function vImport() {
     <div class="fine">Rasta <b>${fresh.length} naujų</b> operacijų: ${cnt("exp")} išlaidos, ${cnt("inc")} pajamos, ${cnt("trf")} pervedimai tarp tavo sąskaitų.${existing.length ? ` ${existing.length} jau buvo importuotos anksčiau.` : ""}${dupT.length ? ` ${dupT.length} pervedimai jau įrašyti iš kitos sąskaitos išrašo.` : ""}${paired ? ` ${paired} pervedimai sujungti su ta pačia operacija kitoje tavo sąskaitoje.` : ""}${Object.keys(skipped).length ? ` Praleista: ${skippedText(skipped)}.` : ""}</div>
     ${fresh.length ? `<div class="fine">Operacijos sugrupuotos pagal vietą. Pakeitus kategoriją grupei, ji pakeičiama visoms grupės operacijoms. ${unsure.length ? `<b>${unsure.length}</b> grupės pažymėtos geltonai: jas verta patikrinti.` : ""}</div>
     <div class="aibox"><button class="btn ghost small" id="impAI" ${ai.busy ? "disabled" : ""}>${ai.busy ? "AI tikrina…" : ai.done ? "Patikrinti dar kartą su AI" : "Patikrinti kategorijas su AI"}</button>
-      <small>${ai.err ? `<span class="err">${esc(ai.err)}</span>` : ai.done ? `AI pakeitė ${ai.changed} grupių kategorijas. Jos pažymėtos „Pakeitė AI“.` : "AI peržiūri pavadinimus ir sumas ir pataiso aiškiai klaidingas kategorijas, pvz. gėrimą degalinėje."}</small></div>
+      <small>${ai.err ? `<span class="err">${esc(ai.err)}</span>` : ai.busy ? "AI peržiūri pavadinimus, sumas ir dažnumą. Tai užtrunka kelias sekundes, gali toliau tikrinti sąrašą." : ai.done ? (ai.changed ? `AI pakeitė ${ai.changed} grupių kategorijas. Jos pažymėtos „Pakeitė AI“ su priežastimi. Jei nesutinki, pakeisk.` : "AI peržiūrėjo ir klaidų nerado.") : "AI peržiūri pavadinimus ir sumas ir pataiso aiškiai klaidingas kategorijas, pvz. gėrimą degalinėje."}</small>
+      <label class="check"><input type="checkbox" id="aiImportAuto" ${S.cfg.prefs?.aiImport !== false ? "checked" : ""}> Tikrinti su AI automatiškai</label></div>
     <div class="filters">${[["all", `Visos (${groups.length})`], ["unsure", `Patikrinti (${unsure.length})`], ["trf", "Pervedimai"], ["inc", "Pajamos"]].map(([k, n]) => `<button class="chip" data-gfilter="${k}" aria-pressed="${f === k}">${n}</button>`).join("")}</div>
     <div class="igs">${shown.map(g => vImpGroup(g, groups.indexOf(g))).join("") || `<div class="empty">Šiame sąraše nieko nėra.</div>`}</div>` : ""}
   </section>
@@ -520,43 +605,137 @@ function groupOverride(i, choice) {
   imp.learned = imp.learned || {};
   imp.learned[key + (bound ? JSON.stringify(bound) : "")] = {pattern: key, choice, dir: g.dir, ...bound};
 }
-// AI peržiūri grupes ir pataiso kategorijas (naudoja tą pačią AI patarėjo funkciją)
-async function aiCheckImport() {
-  const imp = S.imp; if (!imp?._groups) return;
-  imp.ai = {busy: true}; render();
-  const groups = imp._groups.filter(g => !g.rows.some(r => imp.overrides[r.id] && !imp.aiPicked?.has(r.id)));
+/* ---------- AI kategorijų tikrinimas ----------
+   groups: [{note, memo, dir, amounts, count, months?, choice}], grąžina [{i, choice, why}] tik tiems, kuriuos siūloma keisti. */
+async function aiCategorizeGroups(groups, signal) {
   const cats = categories().filter(c => !c.archived);
-  const list = groups.slice(0, 160).map((g, i) => ({i, vieta: g.note, aprašymas: maskCards(g.rows[0].memo || "").slice(0, 90), kryptis: g.dir === "in" ? "gauta" : "išleista",
-    sumos: [...new Set(g.rows.map(r => r.amount))].slice(0, 6), kartai: g.rows.length, dabar: choiceOf(g.rows[0]).replace(/^(exp|inc):/, "")}));
-  const prompt = `Tu esi banko operacijų kategorizavimo įrankis. Lietuvos banko išrašo grupės: kiekviena turi vietą (pardavėją), aprašymą, sumas ir dabartinę kategoriją.
-Kategorijos išlaidoms: ${cats.filter(c => c.type === "exp").map(c => `${c.id} (${c.name})`).join(", ")}.
-Kategorijos pajamoms: ${cats.filter(c => c.type === "inc").map(c => `${c.id} (${c.name})`).join(", ")}.
-Specialios reikšmės: "trf" yra pinigų perkėlimas tarp to paties žmogaus sąskaitų (pvz. papildymas iš kito banko), "keep" reiškia palikti kaip yra.
-Taisyklės: vertink pagal tai, kas tikriausiai buvo nupirkta. Maža suma degalinėje (iki ~20 €) dažniausiai yra kava, gėrimas ar užkandis, o ne degalai. Prekybos centrai yra maistas. Jei abejoji, rašyk "keep". Pajamoms nenaudok išlaidų kategorijų ir atvirkščiai.
-${S.cfg.prefs?.ownName ? `Sąskaitos savininkas: ${S.cfg.prefs.ownName}.\n` : ""}Atsakyk TIK JSON masyvu be jokio kito teksto, pvz. [{"i":0,"c":"food"},{"i":3,"c":"keep"}]. Įtrauk tik tas grupes, kurias keistum.
+  const accs = activeAccounts();
+  const rules = (S.cfg.rules || []).slice(0, 25).map(r => `„${r.pattern}“ → ${r.type === "trf" ? "pervedimas" : catById(r.cat).name}`).join("; ");
+  const list = groups.map((g, i) => ({i, vieta: g.note, aprašymas: maskCards(g.memo || "").slice(0, 100), kryptis: g.dir === "in" ? "gauta" : "išleista",
+    sumos: [...new Set(g.amounts.map(v => r2(v)))].slice(0, 8), kartai: g.count, ...(g.months ? {mėnesių: g.months} : {}), dabar: g.choice}));
+  const prompt = `Tu esi asmeninių finansų operacijų kategorizavimo ekspertas Lietuvoje. Gausi banko operacijų grupes: vieta (pardavėjas ar asmuo), aprašymas, sumos, kiek kartų, dabartinė kategorija.
+Kiekvienai grupei pagalvok: kas tai per įmonė ar asmuo, ką ten tikriausiai pirko pagal sumą ir dažnumą, ar tai išlaida, pajamos ar pinigų perkėlimas tarp savo sąskaitų.
+Išlaidų kategorijos: ${cats.filter(c => c.type === "exp").map(c => `exp:${c.id} (${c.name})`).join(", ")}.
+Pajamų kategorijos: ${cats.filter(c => c.type === "inc").map(c => `inc:${c.id} (${c.name})`).join(", ")}.
+Savo sąskaitos pervedimams: ${accs.map(a => `trf:${a.id} (${a.name}, ${ACCOUNT_KINDS[a.kind] || a.kind})`).join(", ")}, trf: (kita savo sąskaita).
+Svarbios taisyklės:
+- Maži pirkiniai degalinėse (Circle K, Viada, Orlen, Neste, Emsi ir kt., iki ~20 €) dažniausiai yra kava, gėrimai ar užkandžiai (exp:cafe), dideli yra degalai (exp:transport).
+- Prekybos centrai (Maxima, Rimi, Lidl, IKI, Norfa) yra maistas, bet labai didelis pirkinys gali būti apsipirkimas.
+- Paskolų ir lizingo įmokos yra exp:loan arba pervedimas į paskolos sąskaitą, jei ji yra sąraše.
+- Pervedimai į investavimo platformas (Trading 212, Lightyear ir kt.) yra pervedimas į investicijų sąskaitą, jei ji yra sąraše.
+- Pervedimai asmeniui, kurio vardas sutampa su sąskaitos savininku, yra pervedimai tarp savo sąskaitų.
+- Reguliarūs mokėjimai asmeniui panašia suma kas mėnesį dažnai yra nuoma (exp:home).
+- Universiteto, darbdavio ar įmonės reguliarūs mokėjimai yra pajamos (atlyginimas, stipendija ar kitos).
+- Jei negali nuspręsti, grupės neįtrauk.
+${S.cfg.prefs?.ownName ? `Sąskaitos savininkas: ${S.cfg.prefs.ownName}.\n` : ""}${rules ? `Vartotojo nustatytos taisyklės (jų nekeisk): ${rules}.\n` : ""}
+Atsakyk TIK JSON masyvu be jokio kito teksto. Įtrauk tik grupes, kurių kategoriją reikia pakeisti: [{"i":0,"c":"exp:cafe","k":"kava degalinėje"}]. Laukas "k" yra trumpa priežastis lietuviškai (iki 6 žodžių).
 Grupės:
 ${JSON.stringify(list)}`;
   let text = "";
+  await callAI([{role: "user", content: prompt}], t => { text += t; }, {context: {užduotis: "operacijų kategorizavimas"}, tools: false, signal: signal || new AbortController().signal});
+  const j = JSON.parse(text.slice(text.indexOf("["), text.lastIndexOf("]") + 1) || "[]");
+  const out = [];
+  for (const x of Array.isArray(j) ? j : []) {
+    const g = groups[x.i]; if (!g || !x.c) continue;
+    let choice = String(x.c).trim();
+    if (/^(food|home|transport|cafe|fun|subs|health|shop|travel|loan|insurance|other|salary|grant|side|gift|invinc|cashinc|iother)$/.test(choice) || !choice.includes(":")) { const c = catById(choice); choice = c.type === "inc" ? "inc:" + c.id : "exp:" + c.id; }
+    const [type, v] = choice.split(":");
+    if (type === "trf") { if (v && !accById(v)) choice = "trf:"; }
+    else { const c = cats.find(c => c.id === v); if (!c || (c.type === "inc") !== (g.dir === "in") || type !== c.type) continue; }
+    if (choice === g.choice) continue;
+    out.push({i: x.i, choice, why: String(x.k || "").slice(0, 60)});
+  }
+  return out;
+}
+// AI peržiūri importo grupes ir pataiso kategorijas
+async function aiCheckImport(auto) {
+  const imp = S.imp; if (!imp?._groups) return;
+  imp.ai = {busy: true, auto}; render();
+  const groups = imp._groups.filter(g => !g.rows.some(r => imp.overrides[r.id] && !imp.aiPicked?.has(r.id))).slice(0, 160);
   try {
-    await callAI([{role: "user", content: prompt}], t => { text += t; }, {context: {užduotis: "operacijų kategorizavimas"}, tools: false, signal: new AbortController().signal});
-    const j = JSON.parse(text.slice(text.indexOf("["), text.lastIndexOf("]") + 1) || "[]");
-    imp.aiPicked = imp.aiPicked || new Set();
-    let changed = 0;
-    for (const x of Array.isArray(j) ? j : []) {
-      const g = groups[x.i]; if (!g || !x.c || x.c === "keep") continue;
-      let choice = null;
-      if (x.c === "trf") choice = "trf:";
-      else { const c = catById(x.c); if (!c || c.id !== x.c) continue; if ((c.type === "inc") !== (g.dir === "in")) continue; choice = c.type + ":" + c.id; }
-      if (choice === choiceOf(g.rows[0])) continue;
-      for (const r of g.rows) { imp.overrides[r.id] = choice; imp.aiPicked.add(r.id); }
-      changed++;
-    }
-    imp.ai = {done: true, changed};
+    const res = await aiCategorizeGroups(groups.map(g => ({note: g.note, memo: g.rows[0].memo, dir: g.dir, amounts: g.rows.map(r => r.amount), count: g.rows.length, choice: choiceOf(g.rows[0])})));
+    imp.aiPicked = imp.aiPicked || new Set(); imp.aiWhy = imp.aiWhy || {};
+    for (const x of res) for (const r of groups[x.i].rows) { imp.overrides[r.id] = x.choice; imp.aiPicked.add(r.id); imp.aiWhy[r.id] = x.why; }
+    imp.ai = {done: true, changed: res.length};
   } catch (e) {
     imp.ai = {err: "AI patikrinti nepavyko: " + (e.message || "klaida") + ". Kategorijas gali pakeisti pats."};
   }
   if (S.imp === imp) render();
 }
+/* ---------- AI esamų operacijų kategorijų patikra ---------- */
+function existingCatGroups() {
+  const since = addMonths(ymOf(todayISO()), -6) + "-01";
+  const m = new Map();
+  for (const t of S.txs.values()) {
+    if (t.date < since || (t.type !== "exp" && t.type !== "inc") || !t.note) continue;
+    const fuel = FUEL_RE.test(t.note + " " + (t.memo || "")) ? (t.amount < FUEL_SNACK_MAX ? "|maža" : "|didelė") : "";
+    const k = recRoot(t.note) + "|" + t.type + "|" + t.cat + fuel;
+    const g = m.get(k) || {key: k, note: t.note, memo: t.memo, dir: t.type === "inc" ? "in" : "out", txs: [], choice: t.type + ":" + t.cat, fuel};
+    g.txs.push(t); m.set(k, g);
+  }
+  return [...m.values()].sort((a, b) => b.txs.length - a.txs.length);
+}
+async function runAiCats() {
+  const groups = existingCatGroups().slice(0, 180);
+  S.aiCats = {status: "run", items: [], learn: S.aiCats?.learn !== false};
+  render();
+  try {
+    const res = await aiCategorizeGroups(groups.map(g => ({note: g.note, memo: g.memo, dir: g.dir, amounts: g.txs.map(t => t.amount), count: g.txs.length,
+      months: new Set(g.txs.map(t => ymOf(t.date))).size, choice: g.choice})));
+    S.aiCats = {status: "done", learn: S.aiCats.learn, items: res.map(x => ({g: groups[x.i], choice: x.choice, why: x.why, checked: true}))};
+  } catch (e) { S.aiCats = {status: "err", err: e.message || "klaida", items: [], learn: S.aiCats.learn}; }
+  if (S.sub === "aicats") render();
+}
+const choiceName = (choice) => { const [t, v] = choice.split(":"); return t === "trf" ? "Pervedimas: " + (v ? accName(v) : "kita savo sąskaita") : catById(v).name; };
+function vAiCats() {
+  const st = S.aiCats || {status: "idle", items: [], learn: true};
+  const sel = st.items.filter(x => x.checked);
+  return `${subHead("AI kategorijų patikra")}
+  <div class="set-group"><div class="fine">AI peržiūrės paskutinių 6 mėnesių operacijas, sugrupuotas pagal vietą. Kiekvienai grupei jis įvertins, kas tai per įmonė, ką tikriausiai pirkai pagal sumą ir dažnumą, ir pasiūlys tikslesnę kategoriją. Niekas nepakeičiama, kol pats nepatvirtini.</div>
+    <div class="row"><button class="btn" id="aiCatsRun" ${st.status === "run" ? "disabled" : ""}>${st.status === "run" ? "AI tikrina…" : st.status === "done" ? "Tikrinti dar kartą" : "Pradėti patikrą"}</button></div>
+    ${st.status === "err" ? `<div class="err">Nepavyko: ${esc(st.err)}</div>` : ""}</div>
+  ${st.status === "done" ? (st.items.length ? `<section class="card"><div class="sec-h"><h2>Siūlomi pakeitimai</h2><span class="aside">${st.items.length}</span></div>
+    <div class="fine">Atžymėk tuos, su kuriais nesutinki.</div>
+    <div class="aic-list">${st.items.map((x, i) => `<label class="aic ${x.checked ? "" : "off"}"><input type="checkbox" data-aic="${i}" ${x.checked ? "checked" : ""}>
+      <span class="aic-t"><b>${esc(x.g.note)}</b><small>${x.g.txs.length} op. · ${eur(x.g.txs.reduce((s, t) => s + t.amount, 0))}${x.g.fuel ? (x.g.fuel === "|maža" ? " · mažos sumos" : " · didelės sumos") : ""}</small>
+      <span class="aic-ch"><s>${esc(choiceName(x.g.choice))}</s> → <b>${esc(choiceName(x.choice))}</b></span>${x.why ? `<small class="aic-why">AI: ${esc(x.why)}</small>` : ""}</span></label>`).join("")}</div>
+    <label class="check big"><input type="checkbox" id="aiCatsLearn" ${st.learn ? "checked" : ""}><span><b>Kitą kartą priskirti taip pat</b><small>Pakeitimai bus įsiminti, ir nauji išrašai šias vietas priskirs iškart teisingai.</small></span></label>
+    <div class="row"><button class="btn" id="aiCatsApply" style="flex:1" ${sel.length ? "" : "disabled"}>Pritaikyti pažymėtus (${sel.length})</button></div></section>`
+    : `<div class="set-group"><div class="fine">AI klaidų nerado. Kategorijos atrodo teisingos.</div></div>`) : ""}`;
+}
+function applyAiCats() {
+  const st = S.aiCats; if (!st) return;
+  const prev = [], rows = [];
+  let rules = [...(S.cfg.rules || [])];
+  for (const x of st.items.filter(x => x.checked)) {
+    const [type, v] = x.choice.split(":");
+    for (const t of x.g.txs) {
+      prev.push(txRow(t));
+      rows.push(txRow(type === "trf" ? {...t, type: "trf", cat: "transfer", account_id: x.g.dir === "out" ? t.account_id : (v || null), to_account_id: x.g.dir === "out" ? (v || null) : t.account_id} : {...t, type, cat: v}));
+    }
+    if (st.learn) {
+      const pattern = x.g.note.trim().toLowerCase(); if (!pattern) continue;
+      const lim = x.g.fuel === "|maža" ? {max: FUEL_SNACK_MAX - 0.01} : x.g.fuel === "|didelė" ? {min: FUEL_SNACK_MAX} : {};
+      rules = rules.filter(r => !(r.pattern === pattern && r.max === lim.max && r.min === lim.min));
+      rules.unshift(type === "trf" ? {id: shortId(), pattern, type, cat: "transfer", to_account_id: v || null, ...lim} : {id: shortId(), pattern, type, cat: v, ...lim});
+    }
+  }
+  const oldRules = S.cfg.rules;
+  if (rows.length) bulkUpsert("transactions", rows);
+  if (st.learn) { S.cfg.rules = rules; saveSettings("rules"); }
+  S.aiCats = null; S.sub = "cats"; render();
+  toast(`Pakeista ${rows.length} operacijų`, () => { bulkUpsert("transactions", prev); if (st.learn) { S.cfg.rules = oldRules; saveSettings("rules"); } render(); });
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("#aiCatsRun,#aiCatsApply"); if (!b) return;
+  e.stopPropagation();
+  if (b.id === "aiCatsRun") runAiCats(); else applyAiCats();
+}, true);
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (el.dataset?.aic !== undefined && S.aiCats) { const x = S.aiCats.items[+el.dataset.aic]; x.checked = el.checked; render(); }
+  if (el.id === "aiCatsLearn" && S.aiCats) S.aiCats.learn = el.checked;
+}, true);
 function doBankImport() {
   const imp = S.imp; if (!imp) return;
   const fresh = (imp._fresh || []).filter(r => r.type !== "skip");
@@ -569,7 +748,17 @@ function doBankImport() {
   if (rows.length) bulkUpsert("transactions", rows);
   // savo sąskaitų IBAN įsimenami: kitą kartą pervedimai bus atpažinti tiksliai
   const ibanFor = {};
-  if (imp.ownIban) ibanFor[imp.account_id] = [normIban(imp.ownIban)];
+  if (imp.fileIban) {
+    ensureCfg("accounts");
+    S.cfg.accounts = S.cfg.accounts.map(a => {
+      if (a.id !== imp.account_id) return a;
+      const n = {...a, ownIbans: [...new Set([...(a.ownIbans || []), imp.fileIban])]};
+      // tuščia pagrindinė sąskaita pavadinama pagal banką
+      if (a.id === "main" && a.name === "Pagrindinė sąskaita" && imp.fileBank && ![...S.txs.values()].some(t => t.account_id === "main" && !rows.some(r => r.id === t.id))) n.name = imp.fileBank;
+      return n;
+    });
+    saveSettings("accounts");
+  }
   for (const r of fresh) if (r.type === "trf" && r.iban) { const other = r.dir === "out" ? r.to_account_id : r.account_id; if (other && other !== imp.account_id) (ibanFor[other] = ibanFor[other] || []).push(r.iban); }
   if (Object.keys(ibanFor).length) {
     ensureCfg("accounts");

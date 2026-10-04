@@ -144,7 +144,7 @@ function priceChart(pts, cur, range, candles, mini) {
   if (!mini) {
     for (let i = 0; i <= 3; i++) { const v = lo + (hi - lo) * i / 3; g += `<line x1="${L}" x2="${L + pw}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" ${i ? 'stroke-dasharray="2 4"' : ""}/><text x="${L + pw + 6}" y="${y(v) + 4}" font-size="10.5" fill="var(--muted)" font-family="var(--f-num)">${kfmt(v).length > 6 ? kfmt(v) : fmtN.format(v >= 100 ? Math.round(v) : Math.round(v * 100) / 100)}</text>`; }
     const tAt = i => useC ? candles[i][0] : pts[i][0];
-    const lab = t => { const dt = new Date(t * 1000); return range === "1d" ? pad2(dt.getHours()) + ":" + pad2(dt.getMinutes()) : range === "5d" ? dt.getDate() + " " + MSHORT[dt.getMonth()].toLowerCase() : MSHORT[dt.getMonth()] + " " + String(dt.getFullYear()).slice(2); };
+    const lab = t => { const dt = new Date(t * 1000); return range === "1d" ? pad2(dt.getHours()) + ":" + pad2(dt.getMinutes()) : range === "5d" ? dt.getDate() + " " + MSHORT[dt.getMonth()].toLowerCase() : MSHORT[dt.getMonth()] + " " + dt.getFullYear(); };
     g += [0, Math.floor((n - 1) / 2), n - 1].map(i => `<text x="${x(i)}" y="${H - 5}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}" font-size="10.5" fill="var(--muted)" font-family="var(--f-body)">${lab(tAt(i))}</text>`).join("");
   }
   let body;

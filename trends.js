@@ -59,7 +59,7 @@ function trendChart(months, vals, color, stacks) {
     return `<rect x="${x.toFixed(1)}" y="${(T + ph - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}" opacity="${cur ? .45 : 1}"/>`;
   }).join("");
   const every = n > 12 ? 3 : n > 8 ? 2 : 1;
-  const labels = months.map((m, i) => i % every && i !== n - 1 ? "" : `<text x="${(L + slot * i + slot / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="var(--f-body)">${MSHORT[+m.slice(5) - 1]}${m.endsWith("-01") || i === 0 ? " " + m.slice(2, 4) : ""}</text>`).join("");
+  const labels = months.map((m, i) => i % every && i !== n - 1 ? "" : `<text x="${(L + slot * i + slot / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="var(--f-body)">${MSHORT[+m.slice(5) - 1]}</text>`).join("");
   const avgLine = avg > 0 ? `<line x1="${L}" x2="${W - R}" y1="${y(avg)}" y2="${y(avg)}" stroke="var(--ink)" stroke-dasharray="5 4" stroke-width="1.2" opacity=".7"/><text x="${W - R}" y="${y(avg) - 4}" text-anchor="end" font-size="10" fill="var(--ink)" font-family="var(--f-body)">vid. ${eur0(avg)}</text>` : "";
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kitimas per mėnesius">${g}${bars}${avgLine}${labels}
     <rect class="hitarea" x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent"/></svg>`;

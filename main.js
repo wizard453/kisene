@@ -223,7 +223,7 @@ function viewHtml() {
   if (S.tab === "overview") return vOverview();
   if (S.tab === "list") return vList();
   if (S.tab === "invest") return vInvest();
-  const subs = {ai: vAI, import: vImport, invimport: vInvImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp, together: vTogether, spendtrend: () => vTrend("exp"), inctrend: () => vTrend("inc")};
+  const subs = {ai: vAI, aicats: vAiCats, import: vImport, invimport: vInvImport, accounts: vAccounts, budgets: vBudgets, cats: vCats, recurring: vRecurring, goals: vGoals, app: vApp, review: vReview, wealth: vWealthPage, year: vYear, onboard: vOnboard, look: vLook, recreview: vRecReview, help: vHelp, together: vTogether, spendtrend: () => vTrend("exp"), inctrend: () => vTrend("inc")};
   return (subs[S.sub] || vMore)();
 }
 async function render(fromData) {
@@ -405,6 +405,7 @@ document.addEventListener("click", async e => {
     case "aiStop": if (S.ai.ctrl) S.ai.ctrl.abort(); break;
     case "doImport": doBankImport(); break;
     case "impAI": aiCheckImport(); break;
+    case "impNewAcc": if (S.imp) { createImportAccount(S.imp); render(); } break;
     case "impCancel": S.imp = null; if (S.ob) { S.sub = "onboard"; S.ob.step = 2; } render(); break;
     case "addAcc": openAccSheet(null); break;
     case "addLoan": openAccSheet(null, "loan"); break;
@@ -546,7 +547,7 @@ document.addEventListener("change", async e => {
     const f = el.files[0]; const imp = await bankSetupFile(f); el.value = "";
     if (imp === undefined) return;
     if (!imp) { toast("Faile nerasta eilučių"); return; }
-    imp.account_id = $("#impAcc")?.value || "main"; S.imp = imp; render(); return;
+    S.imp = imp; render(); return;
   }
   if (el.dataset.rrv !== undefined && S.recReview) { const it = S.recReview.items[+el.dataset.rrv]; it.checked = el.checked; el.closest(".rrv").classList.toggle("off", !el.checked); return; }
   if (el.dataset.laytoggle) { toggleSection(el.dataset.laytoggle); return; }
@@ -556,14 +557,15 @@ document.addEventListener("change", async e => {
   if (el.id === "obFile" && el.files[0]) {
     const f = el.files[0]; const imp = await bankSetupFile(f); if (imp === undefined) return;
     if (!imp) { toast("Faile nerasta eilučių"); return; }
-    imp.account_id = "main"; S.imp = imp; S.sub = "import"; render(); window.scrollTo(0, 0); return;
+    S.imp = imp; S.sub = "import"; render(); window.scrollTo(0, 0); return;
   }
   if (el.id === "invFile" && el.files[0]) {
     const f = el.files[0]; const imp = invSetup(f.name, await readFileText(f));
     if (!imp) { toast("Faile nerasta eilučių"); return; }
     S.invImp = imp; render(); return;
   }
-  if (el.id === "impAcc" && S.imp) { S.imp.account_id = el.value; S.imp.overrides = {}; render(); return; }
+  if (el.id === "impAcc" && S.imp) { if (el.value === "__new") createImportAccount(S.imp); else { S.imp.account_id = el.value; S.imp.overrides = {}; S.imp.suggestNew = false; } render(); return; }
+  if (el.id === "aiImportAuto") { S.cfg.prefs = {...(S.cfg.prefs || {}), aiImport: el.checked}; saveSettings("prefs"); return; }
   if (el.id === "impLearn" && S.imp) { S.imp.learn = el.checked; return; }
   if (el.id === "impBal" && S.imp) { S.imp.setBalance = el.checked; return; }
   if (el.id === "invPlat" && S.invImp) { S.invImp.platform = el.value.trim(); render(); return; }

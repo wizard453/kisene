@@ -234,7 +234,7 @@ function lineChart(series, range) {
   const path = k => pts.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p[k]).toFixed(1)).join("");
   let grid = "";
   for (let v = lo; v <= hi + 1e-6; v += step) grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${v === lo ? "" : "2 4"}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10.5" fill="var(--muted)" font-family="var(--f-num)">${kfmt(v)}</text>`;
-  const fmtD = t => { const d = new Date(t * 1000); return MSHORT[d.getMonth()] + (pts.length > 60 ? " " + String(d.getFullYear()).slice(2) : ""); };
+  const fmtD = t => { const d = new Date(t * 1000); return MSHORT[d.getMonth()] + (pts.length > 60 ? " " + d.getFullYear() : ""); };
   const lbls = [0, Math.floor((pts.length - 1) / 2), pts.length - 1].map(i => `<text x="${x(i)}" y="${H - 5}" text-anchor="${i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle"}" font-size="10.5" fill="var(--muted)" font-family="var(--f-body)">${fmtD(pts[i].t)}</text>`).join("");
   const last = pts[pts.length - 1];
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Portfelio vertė laike" data-n="${pts.length}">${grid}

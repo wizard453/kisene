@@ -785,3 +785,24 @@ section.card .txs,section.card .notes li,section.card .kv,section.card .wl{backg
 .rrv-q{width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:16px}
 .rrv.add{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
 .rrv.add .btn{grid-column:1/-1;justify-self:start}
+/* Laukiami mokėjimai hero kortelėje */
+.hero .eq-pend>summary{list-style:none;cursor:pointer;color:inherit;font-weight:inherit;font-size:inherit;padding:0;margin:0}
+.eq-pend>summary::-webkit-details-marker{display:none}
+.pend-list{display:flex;flex-direction:column;gap:6px;margin:6px 0 4px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.08)}
+.pend-list div{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}
+.pend-list span{display:flex;flex-direction:column;min-width:0}
+.pend-list small{opacity:.75;font-size:11.5px}
+.eq-pend .linkbtn{color:inherit;text-decoration:underline;font-size:13px;margin-top:4px}
+.hint.warn{background:var(--warn-bg);color:var(--ink);border:1px solid var(--warn)}
+.bankchips{display:flex;flex-wrap:wrap;gap:6px}
+.bankchips .chip{font-size:13px;padding:6px 10px}
+/* AI kategorijų patikra */
+.aic-list{display:flex;flex-direction:column;gap:8px}
+.aic{display:grid;grid-template-columns:22px 1fr;gap:10px;align-items:start;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);cursor:pointer}
+.aic.off{opacity:.55}
+.aic input{width:20px;height:20px;margin-top:2px}
+.aic-t{display:flex;flex-direction:column;gap:3px;min-width:0}
+.aic-t small{color:var(--muted);font-size:12.5px}
+.aic-ch{font-size:13.5px}
+.aic-ch s{color:var(--faint)}
+.aic-why{color:var(--accent)!important}
