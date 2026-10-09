@@ -18,7 +18,15 @@ function vAuth() {
       ${S.authMsg ? `<div class="ok">${esc(S.authMsg)}</div>` : ""}
       <button class="btn wide" id="authBtn">${login ? "Prisijungti" : "Sukurti paskyrą"}</button>
       ${login ? `<button type="button" class="linkbtn" id="forgot" style="align-self:flex-start">Pamiršau slaptažodį</button>` : `<div class="fine">Slaptažodis bent 8 simbolių.</div>`}
+      <div class="or"><span>arba</span></div>
+      <button type="button" class="btn ghost wide gbtn" id="googleBtn"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg> ${login ? "Prisijungti su Google" : "Registruotis su Google"}</button>
     </form>`;
+}
+// Prisijungimas su Google: naršyklė nukreipiama į Google ir grąžinama atgal į programėlę jau prisijungus
+async function googleSignIn() {
+  S.authErr = ""; S.authMsg = "Nukreipiama į Google…"; render();
+  const {error} = await sb.auth.signInWithOAuth({provider: "google", options: {redirectTo: location.origin + location.pathname, queryParams: {prompt: "select_account"}}});
+  if (error) { S.authMsg = ""; S.authErr = /provider is not enabled|unsupported provider/i.test(error.message) ? "Prisijungimas su Google dar neįjungtas serveryje (Supabase → Authentication → Providers → Google)." : authError(error); render(); }
 }
 function authError(e) {
   const m = (e && e.message || "").toLowerCase();
@@ -46,7 +54,7 @@ function vApp() {
   return `${subHead("Profilis")}
   <section class="card pcard">
     <div class="phead"><div class="pavatar">${esc(initials)}</div>
-      <div class="pid"><b>${esc(name || "Vardas nenurodytas")}</b><span>${esc(u.email || "")}</span>${sinceTxt ? `<small>Narys nuo ${sinceTxt}</small>` : ""}</div></div>
+      <div class="pid"><b>${esc(name || "Vardas nenurodytas")}</b><span>${esc(u.email || "")}${(u.app_metadata?.providers || [u.app_metadata?.provider]).includes("google") ? " · Google" : ""}</span>${sinceTxt ? `<small>Narys nuo ${sinceTxt}</small>` : ""}</div></div>
     <div class="pstats">${stat(S.txs.size, "operacijos")}${stat(S.inv.size, "investicijos")}${stat(accounts().length, "sąskaitos")}${stat(nImp, "įkelti failai")}</div>
     ${S.partner ? `<button class="tx plink" data-sub="together"><span class="dot" style="background:var(--c5)">${icon("heart", 16)}</span><div><div class="t1">Susieta su ${esc(partnerName())}</div><div class="t2">Bendra paskyra</div></div><span class="chev">›</span></button>` : ""}
   </section>
@@ -81,6 +89,10 @@ function vApp() {
     <button class="linkbtn" id="runOnboard" style="align-self:flex-start">Paleisti pradžios vedlį iš naujo</button>
     <button class="linkbtn" id="runTour" style="align-self:flex-start">Parodyti mokomąjį turą</button>
   </div>
+  <div class="set-group"><h3>Nustatymai</h3>
+    <div class="fine">Grąžina numatytuosius nustatymus: išvaizdą, apžvalgos skilčių tvarką, „Daugiau“ lango išdėstymą, pranešimus, AI ir grafikų nustatymus. Operacijos, kategorijos, biudžetai, tikslai ir sąskaitos nepasikeičia.</div>
+    <div class="row">${c === "resetprefs" ? `<button class="btn small" id="resetPrefsYes">Atkurti nustatymus</button><button class="btn ghost small" data-confirm="">Atšaukti</button>` : `<button class="btn ghost small" data-confirm="resetprefs">Atkurti numatytuosius nustatymus</button>`}</div>
+  </div>
   <div class="set-group"><h3>Prisijungimas</h3>
     <div class="fine">Prisijunk ta pačia paskyra kitame įrenginyje, ir duomenys bus tie patys.</div>
     <div class="row">${c === "logout"
@@ -88,7 +100,7 @@ function vApp() {
       : `<button class="btn ghost small" data-confirm="logout">Atsijungti</button>`}</div>
   </div>
   <div class="set-group danger-zone"><h3>Pavojinga zona</h3>
-    <div class="dz-item"><div><b>Atstatyti programėlę</b><div class="fine">Ištrinamos visos operacijos, investicijos, įkelti failai, biudžetai, tikslai, sąskaitos ir nustatymai. Paskyra lieka, o programėlė vėl rodo nulius. Atšaukti negalima.</div></div>
+    <div class="dz-item"><div><b>Atstatyti programėlę</b><div class="fine">Ištrinamos visos operacijos, investicijos, įkelti failai, biudžetai, tikslai, sąskaitos, nustatymai ir pranešimai. Paskyra lieka, o programėlė vėl rodo nulius. Atšaukti negalima.</div></div>
       ${c === "reset" ? confirmWord("resetYes", "Atstatyti viską") : `<button class="btn ghost small dz-btn" data-confirm="reset">Atstatyti programėlę</button>`}</div>
     <div class="dz-item"><div><b>Ištrinti profilį</b><div class="fine">Paskyra ir visi jos duomenys ištrinami visam laikui. Jei susieta su partneriu, ryšys nutraukiamas. Šiuo el. paštu vėliau galėsi užsiregistruoti iš naujo.</div></div>
       ${c === "delacc" ? confirmWord("delAccYes", "Ištrinti profilį") : `<button class="btn danger small dz-btn" data-confirm="delacc">Ištrinti profilį</button>`}</div>
@@ -100,6 +112,20 @@ const CONFIRM_WORD = "TRINTI";
 function confirmWord(id, label) {
   return `<div class="dz-confirm"><label class="field">Patvirtinimui įrašyk <b>${CONFIRM_WORD}</b><input id="dzWord" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
     <div class="row"><button class="btn danger small" id="${id}" disabled>${S.dzBusy ? "Vykdoma…" : label}</button><button class="btn ghost small" data-confirm="">Atšaukti</button></div></div>`;
+}
+// Nustatymai, kurie grąžinami į numatytuosius. Duomenys (failai, vardas, biudžetų istorija, stebimos akcijos) lieka.
+const PREF_SETTINGS = ["theme", "layout", "moreLayout", "heroAvg", "aiAuto", "aiImport", "chartStyle", "watchRange", "aiMethod", "customMethod", "pendSkip", "wealthHidden"];
+function resetNotifications() {
+  try { localStorage.removeItem(nKey()); } catch (e) {}
+}
+function resetPrefs() {
+  const p = {...(S.cfg.prefs || {})};
+  for (const k of PREF_SETTINGS) delete p[k];
+  S.cfg.prefs = p; saveSettings("prefs");
+  try { localStorage.removeItem(THEME_KEY); } catch (e) {}
+  resetNotifications();
+  applyTheme({}); S.confirm = null; S.pendOpen = false; render();
+  toast("Nustatymai atkurti");
 }
 const PROFILE_FIELDS = ["budgets", "categories", "rules", "accounts", "recurring", "goals", "assets", "prefs"];
 // Visų duomenų ištrynimas serveryje. Pirmiausia per serverio funkciją, o jei jos dar nėra, tiesiogiai iš lentelių.
@@ -118,8 +144,9 @@ async function resetApp() {
   try {
     if (!S.demo || S.txs.size || S.inv.size) { S.outbox = []; await serverReset(); }
     S.txs = new Map(); S.inv = new Map(); S.outbox = [];
-    const theme = S.cfg.prefs?.theme;
-    S.cfg = blankCfg(); S.cfg.prefs = {onboarded: true, tourDone: true, budHistV: 2, budgetHist: [{from: BUD0, b: {}}], ...(theme ? {theme} : {})};
+    S.cfg = blankCfg(); S.cfg.prefs = {onboarded: true, tourDone: true, budHistV: 2, catV: 2, budgetHist: [{from: BUD0, b: {}}]};
+    try { localStorage.removeItem(THEME_KEY); } catch (e) {}
+    resetNotifications(); applyTheme({});
     S.demoDismissed = true;
     try { localStorage.removeItem("kisene.market." + S.user.id); } catch (e) {}
     enqueue({kind: "settings", fields: [...PROFILE_FIELDS, "demo_dismissed"]});
@@ -227,7 +254,12 @@ function viewHtml() {
   return (subs[S.sub] || vMore)();
 }
 async function render(fromData) {
-  if (S.loaded && S.cfg) { ensureBudHist(); migrateCats(); }
+  if (S.loaded && S.cfg) { ensureBudHist(); migrateCats(); if (S._themeFor !== S.user?.id) {
+    S._themeFor = S.user?.id; applyTheme();
+    // prisijungus per Google vardas paimamas iš Google paskyros (naudojamas pervedimams sau atpažinti)
+    const gName = S.user?.user_metadata?.full_name || S.user?.user_metadata?.name;
+    if (gName && !S.cfg.prefs?.ownName) { S.cfg.prefs = {...(S.cfg.prefs || {}), ownName: String(gName).slice(0, 60)}; saveSettings("prefs"); }
+  } }
   if (S.user && !S.demo && ["ai", "spendtrend", "import", "aicats"].includes(S.sub)) warmAI();
   const signedIn = !!S.user && !S.recovery;
   $("#authScreen").hidden = signedIn; $("#appScreen").hidden = !signedIn; $("#tabs").hidden = !signedIn;
@@ -444,6 +476,8 @@ document.addEventListener("click", async e => {
     case "wipeInvYes": S.inv.clear(); S.confirm = null; enqueue({kind: "wipe", table: "inv_tx"}); render(); toast("Investicijų operacijos ištrintos"); break;
     case "logoutYes": await signOut(); break;
     case "resetYes": resetApp(); break;
+    case "googleBtn": googleSignIn(); break;
+    case "resetPrefsYes": resetPrefs(); break;
     case "delAccYes": deleteAccount(); break;
     case "pwOpen": S.pw = {open: true}; render(); break;
     case "pwCancel": S.pw = null; render(); break;

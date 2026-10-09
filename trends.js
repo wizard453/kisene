@@ -26,10 +26,10 @@ function monthVals(months, kind, cat) {
   const txs = allTx();
   return months.map(m => { const a = monthAgg(m, txs); return kind === "exp" ? (cat ? a.byCat[cat] || 0 : a.exp) : (cat ? a.byInc[cat] || 0 : a.inc); });
 }
-// vidurkis tik iš pilnų mėnesių (be einamojo)
+// vidurkis tik iš pilnų mėnesių, už kuriuos įkelti duomenys (be einamojo ir be mėnesių prieš pirmą įkeltą)
 function avgFull(months, vals) {
-  const now = ymOf(todayISO());
-  const v = vals.filter((x, i) => months[i] !== now);
+  const ok = new Set(dataMonths(allTx(), ymOf(todayISO()), 120));
+  const v = vals.filter((x, i) => ok.has(months[i]));
   return v.length ? v.reduce((s, x) => s + x, 0) / v.length : 0;
 }
 
@@ -162,8 +162,8 @@ function vMethodAI() {
 }
 function methodPrompt(mk) {
   const groups = mk === "custom" ? customGroups() : BUDGET_METHODS[mk].groups;
-  const now = ymOf(todayISO()), months = [1, 2, 3].map(i => addMonths(now, -i)), txs = allTx();
-  const aggs = months.map(m => monthAgg(m, txs)).filter(a => a.n);
+  const now = ymOf(todayISO()), txs = allTx(), months = dataMonths(txs, now);
+  const aggs = months.map(m => monthAgg(m, txs));
   const k = Math.max(1, aggs.length);
   const inc = aggs.reduce((s, a) => s + a.inc, 0) / k, inv = aggs.reduce((s, a) => s + a.inv, 0) / k, debt = aggs.reduce((s, a) => s + a.debt, 0) / k;
   const byCat = {};

@@ -24,6 +24,8 @@ function themePrefs() {
   // senas numatytasis fonas „Šalavijas“ pakeičiamas nauju „Kišenė“
   const mig = o => o && o.bg === "sage" ? {...o, bg: "brand"} : o;
   if (p) return mig(p);
+  // paskyros duomenys įkelti, o temos nėra: nauja paskyra, todėl numatytoji išvaizda (ne kitos paskyros šiame įrenginyje)
+  if (S?.loaded) return {};
   try { return mig(JSON.parse(localStorage.getItem(THEME_KEY) || "null")) || {}; } catch (e) { return {}; }
 }
 function mix(hex, other, t) {
@@ -75,7 +77,7 @@ function vLook() {
     <div class="seg three">${[["list", "Sąrašas"], ["grid", "Mažos ikonos"], ["tiles", "Didelės plytelės"]].map(([k, n]) => `<button data-morelayout="${k}" aria-pressed="${ml === k}">${n}</button>`).join("")}</div></div>
   ${vLayoutEditor()}
   <div class="set-group"><h3>Laisvų pinigų skaičiavimas</h3>
-    <label class="check"><input type="checkbox" id="heroAvg" ${S.cfg.prefs?.heroAvg !== false ? "checked" : ""}> Kol atlyginimas negautas, naudoti paskutinių 3 mėnesių pajamų vidurkį</label>
+    <label class="check"><input type="checkbox" id="heroAvg" ${S.cfg.prefs?.heroAvg !== false ? "checked" : ""}> Kol atlyginimas negautas, naudoti visų įkeltų mėnesių pajamų vidurkį</label>
     <div class="fine">Išjungus, skaičiuojama tik pagal jau gautas pajamas ir suplanuotas pasikartojančias pajamas.</div></div>
   <button class="linkbtn" id="thReset" style="align-self:flex-start">Atkurti numatytąją išvaizdą</button>`;
 }

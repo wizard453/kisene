@@ -12,7 +12,7 @@ function startOnboarding() {
 }
 function suggestBudgets() {
   const now = ymOf(todayISO()), txs = [...S.txs.values()];
-  const months = [1, 2, 3].map(k => monthAgg(addMonths(now, -k), txs)).filter(a => a.n > 0);
+  const months = dataMonths(txs, now).map(m => monthAgg(m, txs));
   if (!months.length) return [];
   return catsOf("exp").filter(c => c.id !== "other").map(c => {
     const avg = months.reduce((s, a) => s + (a.byCat[c.id] || 0), 0) / months.length;

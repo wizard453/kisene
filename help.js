@@ -7,8 +7,8 @@ S.help = S.help || {lesson: null};
 const NEEDS = ["food", "home", "utilities", "transport", "health", "loan", "insurance"];
 function helpStats() {
   const now = ymOf(todayISO());
-  const months = [1, 2, 3].map(i => addMonths(now, -i));
   const txs = [...S.txs.values()];
+  const months = dataMonths(txs, now);
   let inc = 0, exp = 0, needs = 0, n = 0;
   for (const m of months) {
     const a = monthAgg(m, txs);
@@ -165,7 +165,7 @@ const HELP_FAQ = [
   ["Kaip atsisiųsti išrašą iš banko?", () => `<p>Programėlė priima CSV, Excel (.xlsx) ir XML (ISO 20022, camt.053) išrašus. PDF netinka. Patogiausia išrašą atsisiųsti kompiuteryje.</p>
     ${BANK_GUIDES.map(b => `<p><b>${esc(b.n)}</b> · ${esc(b.f)}</p><ol>${b.steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>`).join("")}
     <p>Bankai kartais pakeičia meniu pavadinimus. Jei nerandi, ieškok „Sąskaitos išrašas“. Failą įkelk skiltyje Daugiau → Banko išrašo importas.</p>`],
-  ["Kas yra „Laisvi pinigai“?", `<p>Pagrindinė Apžvalgos kortelė rodo, kiek dar gali išleisti ar atsidėti iki mėnesio pabaigos.</p><p>Skaičiuojama taip: šio mėnesio pajamos atėmus tai, kas jau išleista, mokėjimus, kurie dar laukia (nuoma, lizingas, prenumeratos), investavimą ir paskolų įmokas. Kol atlyginimas dar negautas, gali būti naudojamas paskutinių 3 mėnesių pajamų vidurkis. Tai galima išjungti skiltyje Išvaizda.</p>`],
+  ["Kas yra „Laisvi pinigai“?", `<p>Pagrindinė Apžvalgos kortelė rodo, kiek dar gali išleisti ar atsidėti iki mėnesio pabaigos.</p><p>Skaičiuojama taip: šio mėnesio pajamos atėmus tai, kas jau išleista, mokėjimus, kurie dar laukia (nuoma, lizingas, prenumeratos), investavimą ir paskolų įmokas. Kol atlyginimas dar negautas, gali būti naudojamas visų įkeltų pilnų mėnesių pajamų vidurkis. Tai galima išjungti skiltyje Išvaizda.</p>`],
   ["Kaip įvesti operacijas?", `<p>Yra du būdai:</p><ul><li>Pliuso mygtukas apačioje: įrašai išlaidas, pajamas ar pervedimą ranka. Patogu grynųjų pinigų išlaidoms.</li><li>Banko išrašo importas (Daugiau → Banko išrašo importas): kartą per mėnesį įkeli CSV failą iš banko, ir programėlė pati sukuria visas operacijas.</li></ul><p>Tą patį išrašą įkėlus kelis kartus, operacijos nesidubliuoja.</p>`],
   ["Kaip programėlė parenka kategorijas?", `<p>Pagal parduotuvės ar gavėjo pavadinimą, pvz. „Maxima“ yra maistas, „Bolt“ yra transportas. Jei kategorija neatpažinta, operacija patenka į „Be kategorijos“.</p><p>Kai pakeiti operacijos kategoriją, programėlė pasiūlo įsiminti taisyklę, ir kitą kartą tokia operacija bus priskirta automatiškai. Taisykles gali peržiūrėti skiltyje Kategorijos ir taisyklės.</p>`],
   ["Kam reikia pasikartojančių mokėjimų?", `<p>Pasikartojantys mokėjimai yra tai, ką moki kas mėnesį: nuoma, lizingas, telefonas, prenumeratos. Jie naudojami planuojant, kad „Laisvi pinigai“ jau atimtų dar nesumokėtas sąskaitas.</p><p>Po kiekvieno banko išrašo importo programėlė parodo rastus reguliarius mokėjimus. Pažymėk tuos, kurie tęsis, ir atžymėk baigtus (pvz. sumokėtą lizingą).</p><p>Grynųjų pinigų mokėjimams gali įjungti automatinį operacijos sukūrimą, nes jų banko išraše nebus.</p>`],

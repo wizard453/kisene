@@ -38,9 +38,29 @@ function monthAgg(ym, txs) {
   }
   return a;
 }
+/* ---------- Vidurkiai ----------
+   Vidurkis skaičiuojamas iš visų pilnų mėnesių, už kuriuos įkelti duomenys (ne fiksuotai iš 3).
+   Pirmas mėnuo praleidžiamas, jei duomenys prasideda tik jo viduryje, nes jis būtų nepilnas. */
+function dataRange(txs) {
+  let first = null, last = null;
+  for (const t of txs) { if (t.type === "trf") continue; if (!first || t.date < first) first = t.date; if (!last || t.date > last) last = t.date; }
+  return first ? {first, last} : null;
+}
+function dataMonths(txs, before, max) {
+  const r = dataRange(txs); if (!r) return [];
+  before = before || ymOf(todayISO()); max = max || 12;
+  let start = ymOf(r.first); if (+r.first.slice(8) > 7) start = addMonths(start, 1);
+  const lastYm = ymOf(r.last);
+  let end = addMonths(before, -1); if (lastYm < end) end = lastYm;
+  const out = [];
+  for (let m = end; m >= start && out.length < max; m = addMonths(m, -1)) out.push(m);
+  // tik vienas nepilnas mėnuo: geriau jis nei nieko
+  if (!out.length && ymOf(r.first) < before) out.push(ymOf(r.first));
+  return out;
+}
 function insights(ym, txs) {
   const out = []; const cur = monthAgg(ym, txs);
-  const prev = [1, 2, 3].map(k => monthAgg(addMonths(ym, -k), txs)).filter(a => a.n > 0);
+  const prev = dataMonths(txs, ym).map(m => monthAgg(m, txs));
   for (const c of catsOf("exp")) {
     const b = budgetsFor(ym)[c.id]; const v = cur.byCat[c.id] || 0;
     if (b > 0 && v > b) out.push({lvl: "crit", ic: "!", t: `${c.name}: viršytas biudžetas ${eur(v - b)} (${eur(v)} iš ${eur0(b)}).`});
@@ -154,7 +174,7 @@ const recIsOut = r => r.type === "exp" || (r.type === "trf" && (isInvestAcc(r.to
 function spendable() {
   const ym = ymOf(todayISO()), today = new Date().getDate(), txs = allTx();
   const a = monthAgg(ym, txs);
-  const prev = [1, 2, 3].map(k => monthAgg(addMonths(ym, -k), txs)).filter(x => x.n > 0);
+  const prev = dataMonths(txs, ym).map(m => monthAgg(m, txs));
   const avgInc = prev.length ? prev.reduce((s, x) => s + x.inc, 0) / prev.length : 0;
   const pending = [];
   let pendInc = 0;
@@ -186,7 +206,7 @@ function spendable() {
   // biudžetuose dar numatyta (likusi biudžeto dalis, kurios dar neišleidai)
   let budLeft = 0;
   for (const c of catsOf("exp")) { const b = budgetsFor(ym)[c.id]; if (b > 0) budLeft += Math.max(0, b - (a.byCat[c.id] || 0)); }
-  return {left, perDay: left / daysLeft, daysLeft, expected, received: a.inc, waiting, fromAvg: useAvg && avgInc > known, spent: a.exp, saved, debt: a.debt, pendOut, pending, budLeft, nAuto: pending.filter(x => x.auto).length, pendAll};
+  return {left, perDay: left / daysLeft, daysLeft, expected, received: a.inc, waiting, fromAvg: useAvg && avgInc > known, avgN: prev.length, spent: a.exp, saved, debt: a.debt, pendOut, pending, budLeft, nAuto: pending.filter(x => x.auto).length, pendAll};
 }
 /* ---------- Grafikai ---------- */
 function donut(slices, total, label, clickable) {
@@ -268,7 +288,7 @@ function ovHero(a, txs) {
       <div class="big num">${eur0(Math.abs(sp.left))}</div>
       <div class="rate">${neg ? "Išlaidos ir suplanuoti mokėjimai viršija šio mėnesio pajamas." : `Tiek lieka iš šio mėnesio pajamų sumokėjus visas suplanuotas sąskaitas. Tai suma, kurią dar gali išleisti arba atsidėti: apie ${eur0(sp.perDay)} per dieną, liko ${sp.daysLeft} d.`}</div>
       <div class="eq">
-        ${line("Pajamos", sp.expected, "+", sp.waiting > 0.5 ? `gauta ${eur0(sp.received)}, dar laukiama ${eur0(sp.waiting)}${sp.fromAvg ? " (pagal 3 mėn. vidurkį)" : ""}` : "")}
+        ${line("Pajamos", sp.expected, "+", sp.waiting > 0.5 ? `gauta ${eur0(sp.received)}, dar laukiama ${eur0(sp.waiting)}${sp.fromAvg ? ` (pagal ${sp.avgN} mėn. vidurkį)` : ""}` : "")}
         ${line("Jau išleista", sp.spent, "−", "")}
         ${sp.pendAll.length ? `<details class="eq-pend" ${S.pendOpen ? "open" : ""}><summary>${line("Dar reikės sumokėti", sp.pendOut, "−", `${sp.pending.length} mokėjimai iki mėnesio pabaigos · ${S.pendOpen ? "slėpti" : "rodyti ir keisti"}`)}</summary>
           <div class="pend-help">Pažymėk, kuriuos mokėjimus šį mėnesį dar reikės sumokėti. Atžymėti neskaičiuojami tik šį mėnesį.</div>
